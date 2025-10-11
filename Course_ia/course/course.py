@@ -177,7 +177,7 @@ class Car :
             bouton = [0,0,0]
             keys = pygame.key.get_pressed()
             avance = keys[pygame.K_UP]
-            recule = keys[pygame.K_DOWN]
+            #recule = keys[pygame.K_DOWN]
             droite = keys[pygame.K_RIGHT]
             gauche = keys[pygame.K_LEFT]
                 
