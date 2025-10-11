@@ -103,7 +103,6 @@ class Car :
         direction = pygame.Vector2(math.cos(angle_rad), math.sin(angle_rad))
         
         vitesse_actuelle = self.position - self.pos_old
-        print(vitesse_actuelle.length())
         if vitesse_actuelle.length() > 4:
             while True :
                 pass
