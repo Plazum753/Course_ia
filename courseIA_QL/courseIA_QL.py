@@ -95,7 +95,7 @@ class Car :
         self.dist_bord = 2.0
         self.dist_centre_old = 10
         self.diff_angle = 0
-        self.diff_angle_devant_old = 0
+        self.diff_angle_old = 0
         self.distance_parcouru = 0
         self.distance()
         self.reward = 0
@@ -129,30 +129,27 @@ class Car :
             self.dist_bord = self.dist_bord//10.0
         
         
-     #   self.diff_angle = (-math.atan2(bord[new_dist+1][1]-bord[new_dist][1],bord[new_dist+1][0]-bord[new_dist][0])*180/math.pi+360)%360-self.angle
-      #  self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
-        
-        #angle_reward = abs(self.diff_angle)
-                                
-       # if self.diff_angle > 0:
-         #   self.diff_angle = (math.log(self.diff_angle)-math.log(8)+1)//1.0
-        #else : # <= 0
-          #  if abs(self.diff_angle) < 8:
-           #     self.diff_angle = 0.0
-            #else :
-             #   self.diff_angle = -(math.log(-self.diff_angle)-math.log(8)+1)//1.0
+        self.diff_angle = (-math.atan2(bord[new_dist+1+int(dist_min)][1]-bord[new_dist+int(dist_min)][1],bord[new_dist+1+int(dist_min)][0]-bord[new_dist+int(dist_min)][0])*180/math.pi+360)%360-self.angle
+        self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
                 
+        if self.n_games<600 :
+            if dist_min < 54 :
+                if abs(self.diff_angle) < abs(self.diff_angle_old):
+                    self.reward += 1
+                else :
+                    self.reward -= 1
+            else :
+                if self.diff_angle < self.diff_angle_old :
+                    self.reward += 1
+                else :
+                    self.reward -= 1
+                    
+        self.diff_angle_old = self.diff_angle
+                
+# =============================================================================
 
         self.diff_angle_devant = (-math.atan2(bord[new_dist+76][1]-bord[new_dist+75][1],bord[new_dist+76][0]-bord[new_dist+75][0])*180/math.pi+360)%360-self.angle
         self.diff_angle_devant = (self.diff_angle_devant+540)%360-180 # intervalle [-180, 180[
-        
-        
-        if map_fini == False and dist_min > 18 :
-            if abs(self.diff_angle_devant) < abs(self.diff_angle_devant_old):
-                self.reward += 1
-            else :
-                self.reward -= 1
-        self.diff_angle_devant_old = self.diff_angle_devant
         
         
         self.diff_angle_devant = max(-16.0 ,min(15.0, self.diff_angle_devant//6.0)) # -90 à 90; 32 possibilités
@@ -162,7 +159,7 @@ class Car :
         
         self.reward += (new_dist-self.distance_parcouru)
                  
-        if not map_fini :
+        if self.n_games<2000 :
             if dist_centre < self.dist_centre_old : 
                 self.reward += 1
             elif dist_centre > self.dist_centre_old :
@@ -317,7 +314,7 @@ class Car :
 # =============================== éxécution de l'action ================================================
             self.reward = 0
             
-            if map_fini == False and (vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5 > 2.5 and avance == True:
+            if self.n_games<600 and (vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5 > 2.5 and avance == True:
                 self.reward -= 2
                 
                 
@@ -353,7 +350,7 @@ class Car :
             if self.collision() or self.pause > 100:
                 self.game_over = True
                 
-                self.reward -= 100
+                self.reward -= 200
                 
                 if self.distance_parcouru > self.dist_max :
                     self.dist_max += (self.distance_parcouru-self.dist_max)*0.01
