@@ -131,18 +131,23 @@ class Car :
         self.diff_angle = (-math.atan2(bord[new_dist+1+int(dist_min)][1]-bord[new_dist+int(dist_min)][1],bord[new_dist+1+int(dist_min)][0]-bord[new_dist+int(dist_min)][0])*180/math.pi+360)%360-self.angle
         self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
                 
-        if not map_fini :
-            if dist_min < 54 :
-                if abs(self.diff_angle) < abs(self.diff_angle_old):
+        if self.n_games < 1000 :
+            if dist_min < 18 :
+                if self.diff_angle > self.diff_angle_old :
                     self.reward += 1
                 else :
                     self.reward -= 1
-            else :
+            elif dist_min > 54 :
                 if self.diff_angle < self.diff_angle_old :
                     self.reward += 1
                 else :
                     self.reward -= 1
-                    
+            else :
+                  if abs(self.diff_angle) < abs(self.diff_angle_old):
+                      self.reward += 1
+                  else :
+                      self.reward -= 1
+                      
         self.diff_angle_old = self.diff_angle
                 
 # =============================================================================
@@ -157,15 +162,15 @@ class Car :
         
         self.reward += (new_dist-self.distance_parcouru)
         
-        dist_centre = abs(dist_min-36)
+        # dist_centre = abs(dist_min-36)
 
-        if not map_fini :
-            if dist_centre < self.dist_centre_old : 
-                self.reward += 1
-            elif dist_centre > self.dist_centre_old :
-                self.reward -= 1
+        # if not map_fini :
+        #     if dist_centre < self.dist_centre_old : 
+        #         self.reward += 1
+        #     elif dist_centre > self.dist_centre_old :
+        #         self.reward -= 1
         
-        self.dist_centre_old = dist_centre
+        # self.dist_centre_old = dist_centre
 
         self.distance_parcouru = new_dist
 
