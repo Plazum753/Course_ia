@@ -95,6 +95,7 @@ class Car :
         self.dist_bord = 2.0
         self.diff_angle = 0
         self.diff_angle_old = 0
+        self.dist_centre_old = 10
         self.distance_parcouru = 0
         self.distance()
         self.reward = 0
@@ -156,6 +157,16 @@ class Car :
         
         self.reward += (new_dist-self.distance_parcouru)
         
+        dist_centre = abs(dist_min-36)
+
+        if not map_fini :
+            if dist_centre < self.dist_centre_old : 
+                self.reward += 1
+            elif dist_centre > self.dist_centre_old :
+                self.reward -= 1
+        
+        self.dist_centre_old = dist_centre
+
         self.distance_parcouru = new_dist
 
             
