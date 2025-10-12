@@ -100,7 +100,7 @@ class Car :
         self.distance()
         self.reward = 0
         
-        self.lr = max(0.001, 0.01 - self.n_games * 2*10**-6)
+        self.lr = max(0.0001, 0.001 - self.n_games * 2*10**-7)
         
         self.Jeux()
     
@@ -132,7 +132,7 @@ class Car :
         self.diff_angle = (-math.atan2(bord[new_dist+1+int(dist_min)][1]-bord[new_dist+int(dist_min)][1],bord[new_dist+1+int(dist_min)][0]-bord[new_dist+int(dist_min)][0])*180/math.pi+360)%360-self.angle
         self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
                 
-        if self.n_games<600 :
+        if not map_fini :
             if dist_min < 54 :
                 if abs(self.diff_angle) < abs(self.diff_angle_old):
                     self.reward += 1
@@ -314,7 +314,7 @@ class Car :
 # =============================== éxécution de l'action ================================================
             self.reward = 0
             
-            if self.n_games<600 and (vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5 > 2.5 and avance == True:
+            if not map_fini and (vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5 > 2.5 and avance == True:
                 self.reward -= 2
                 
                 
