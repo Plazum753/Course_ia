@@ -93,7 +93,6 @@ class Car :
         self.reward = 0
         self.pause = 0
         self.dist_bord = 2.0
-        self.dist_centre_old = 10
         self.diff_angle = 0
         self.diff_angle_old = 0
         self.distance_parcouru = 0
@@ -121,7 +120,6 @@ class Car :
         # state
         
         self.dist_bord = dist_min
-        dist_centre = abs(dist_min-36)
         
         if self.dist_bord > 70:
             self.dist_bord = 7.0
@@ -156,17 +154,7 @@ class Car :
         
         # state
         
-        
         self.reward += (new_dist-self.distance_parcouru)
-                 
-        if self.n_games<2000 :
-            if dist_centre < self.dist_centre_old : 
-                self.reward += 1
-            elif dist_centre > self.dist_centre_old :
-                self.reward -= 1
-                
-        self.dist_centre_old = dist_centre
-        
         
         self.distance_parcouru = new_dist
 
