@@ -100,7 +100,7 @@ class Car :
         self.distance()
         self.reward = 0
         
-        self.lr = max(0.0001, 0.001 - self.n_games * 2*10**-7)
+        self.lr = max(10**-3, 10**-2 - self.n_games * 10**-6)
         
         self.Jeux()
     
@@ -131,22 +131,22 @@ class Car :
         self.diff_angle = (-math.atan2(bord[new_dist+1+int(dist_min)][1]-bord[new_dist+int(dist_min)][1],bord[new_dist+1+int(dist_min)][0]-bord[new_dist+int(dist_min)][0])*180/math.pi+360)%360-self.angle
         self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
                 
-        if self.n_games < 1000 :
+        if not map_fini :
             if dist_min < 18 :
                 if self.diff_angle > self.diff_angle_old :
-                    self.reward += 1
+                    self.reward += 0.005
                 else :
-                    self.reward -= 1
+                    self.reward -= 0.005
             elif dist_min > 54 :
                 if self.diff_angle < self.diff_angle_old :
-                    self.reward += 1
+                    self.reward += 0.005
                 else :
-                    self.reward -= 1
+                    self.reward -= 0.005
             else :
                   if abs(self.diff_angle) < abs(self.diff_angle_old):
-                      self.reward += 1
+                      self.reward += 0.005
                   else :
-                      self.reward -= 1
+                      self.reward -= 0.005
                       
         self.diff_angle_old = self.diff_angle
                 
@@ -160,7 +160,7 @@ class Car :
         
         # state
         
-        self.reward += (new_dist-self.distance_parcouru)
+        self.reward += (new_dist-self.distance_parcouru)*0.005
         
         # dist_centre = abs(dist_min-36)
 
@@ -319,7 +319,7 @@ class Car :
             self.reward = 0
             
             if not map_fini and (vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5 > 2.5 and avance == True:
-                self.reward -= 2
+                self.reward -= 0.005
                 
                 
             if droite and not gauche:
@@ -354,7 +354,7 @@ class Car :
             if self.collision() or self.pause > 100:
                 self.game_over = True
                 
-                self.reward -= 200
+                self.reward -= 1
                 
                 if self.distance_parcouru > self.dist_max :
                     self.dist_max += (self.distance_parcouru-self.dist_max)*0.01
@@ -529,7 +529,7 @@ def train():
     while len(reward_moy)>100:
         reward_moy.pop(0)
     scores_moy_plot.append(round(sum(score_moy)/len(score_moy),2))
-    reward_moy_plot.append(round(sum(reward_moy)/len(reward_moy),2))
+    reward_moy_plot.append(round(sum(reward_moy)/len(reward_moy)*100,2))
     
     plot(scores_plot,scores_moy_plot,reward_moy_plot)
     
