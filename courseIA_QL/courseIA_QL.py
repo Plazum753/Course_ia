@@ -491,7 +491,7 @@ def train():
                     
             if car.quart_tour<0:
                 affiche("Tour : 0/3",(Largeur-60,25))
-            elif car.quart_tour > 3:
+            elif car.quart_tour > 11:
                 affiche("Tour : 3/3",(Largeur-60,25))
             else:
                 affiche("Tour :"+str(car.quart_tour//4+1)+"/3",(Largeur-60,25))
