@@ -68,8 +68,9 @@ class Car :
         
         self.actions = ([1,0],[1,1],[1,2],[0,0],[0,1],[0,2])
         
-        self.n_games = 0
-        
+        self.n_games = 100 #TODO
+        self.lr = 0.01    #max(2*10**-2, 2*10**-1 - self.n_games * 10**-5)
+
         self.gamma = 0.99 # long ou court terme
                                                 
     def reset(self):            
@@ -99,7 +100,6 @@ class Car :
         self.reward = 0
         self.n_mort = 0
         
-        self.lr = 0.01    #max(2*10**-2, 2*10**-1 - self.n_games * 10**-5)
         
         self.Jeux()
     
@@ -130,22 +130,21 @@ class Car :
         self.diff_angle = (-math.atan2(bord[new_dist+1+int(dist_min)][1]-bord[new_dist+int(dist_min)][1],bord[new_dist+1+int(dist_min)][0]-bord[new_dist+int(dist_min)][0])*180/math.pi+360)%360-self.angle
         self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
                 
-        # if not map_fini :
-        #     if dist_min < 18 :
-        #         if self.diff_angle > self.diff_angle_old :
-        #             self.reward += 0.005
-        #         else :
-        #             self.reward -= 0.005
-        #     elif dist_min > 54 :
-        #         if self.diff_angle < self.diff_angle_old :
-        #             self.reward += 0.005
-        #         else :
-        #             self.reward -= 0.005
+        # if dist_min < 18 :
+        #     if self.diff_angle > self.diff_angle_old :
+        #         self.reward += 0.01
         #     else :
-        #           if abs(self.diff_angle) < abs(self.diff_angle_old):
-        #               self.reward += 0.005
-        #           else :
-        #               self.reward -= 0.005
+        #         self.reward -= 0.01
+        # elif dist_min > 54 :
+        #     if self.diff_angle < self.diff_angle_old :
+        #         self.reward += 0.01
+        #     else :
+        #         self.reward -= 0.01
+        # else :
+        #       if abs(self.diff_angle) < abs(self.diff_angle_old):
+        #           self.reward += 0.01
+        #       else :
+        #           self.reward -= 0.01
                       
         self.diff_angle_old = self.diff_angle
                 
@@ -489,8 +488,10 @@ def train():
                     
             if car.quart_tour<0:
                 affiche("Tour : 0/3",(Largeur-60,25))
+            elif car.quart_tour > 3:
+                affiche("Tour : 3/3",(Largeur-60,25))
             else:
-                affiche("Tour :"+str(car.quart_tour//4)+"/3",(Largeur-60,25))
+                affiche("Tour :"+str(car.quart_tour//4+1)+"/3",(Largeur-60,25))
             if car.tps_debut == -1 :
                 affiche("Chrono : 0s",(Largeur-75,50))
             else :
