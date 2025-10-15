@@ -10,9 +10,9 @@ def plot(score, score_moy, reward):
     plt.title('Training...')
     plt.xlabel('Number of games')
     plt.ylabel('Temps')
-    plt.plot(score,"g*")
+    plt.plot(score,"g*", label="temps en secondes")    
+    plt.plot(score_moy,"g", label="temps moyen en secondes")
     plt.plot(reward,"r", label="nombre d'accidents")
-    plt.plot(score_moy,"g", label="temps en secondes")
     plt.ylim(ymin=0,ymax=100)
     plt.xlim(left=0)
     if score[-1] < 100 :
