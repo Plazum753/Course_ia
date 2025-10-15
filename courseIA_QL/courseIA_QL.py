@@ -71,9 +71,7 @@ class Car :
         self.n_games = 0
         
         self.gamma = 0.99 # long ou court terme
-        
-        self.dist_max = 0
-                                        
+                                                
     def reset(self):            
         self.reward_tot = 0
         self.img = self.img_origine 
@@ -99,8 +97,9 @@ class Car :
         self.distance_parcouru = 0
         self.distance()
         self.reward = 0
+        self.n_mort = 0
         
-        self.lr = max(10**-3, 10**-2 - self.n_games * 10**-6)
+        self.lr = 0.01    #max(2*10**-2, 2*10**-1 - self.n_games * 10**-5)
         
         self.Jeux()
     
@@ -131,22 +130,22 @@ class Car :
         self.diff_angle = (-math.atan2(bord[new_dist+1+int(dist_min)][1]-bord[new_dist+int(dist_min)][1],bord[new_dist+1+int(dist_min)][0]-bord[new_dist+int(dist_min)][0])*180/math.pi+360)%360-self.angle
         self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
                 
-        if not map_fini :
-            if dist_min < 18 :
-                if self.diff_angle > self.diff_angle_old :
-                    self.reward += 0.005
-                else :
-                    self.reward -= 0.005
-            elif dist_min > 54 :
-                if self.diff_angle < self.diff_angle_old :
-                    self.reward += 0.005
-                else :
-                    self.reward -= 0.005
-            else :
-                  if abs(self.diff_angle) < abs(self.diff_angle_old):
-                      self.reward += 0.005
-                  else :
-                      self.reward -= 0.005
+        # if not map_fini :
+        #     if dist_min < 18 :
+        #         if self.diff_angle > self.diff_angle_old :
+        #             self.reward += 0.005
+        #         else :
+        #             self.reward -= 0.005
+        #     elif dist_min > 54 :
+        #         if self.diff_angle < self.diff_angle_old :
+        #             self.reward += 0.005
+        #         else :
+        #             self.reward -= 0.005
+        #     else :
+        #           if abs(self.diff_angle) < abs(self.diff_angle_old):
+        #               self.reward += 0.005
+        #           else :
+        #               self.reward -= 0.005
                       
         self.diff_angle_old = self.diff_angle
                 
@@ -160,17 +159,7 @@ class Car :
         
         # state
         
-        self.reward += (new_dist-self.distance_parcouru)*0.005
-        
-        # dist_centre = abs(dist_min-36)
-
-        # if not map_fini :
-        #     if dist_centre < self.dist_centre_old : 
-        #         self.reward += 1
-        #     elif dist_centre > self.dist_centre_old :
-        #         self.reward -= 1
-        
-        # self.dist_centre_old = dist_centre
+        self.reward += (new_dist-self.distance_parcouru)*0.05
 
         self.distance_parcouru = new_dist
 
@@ -198,10 +187,11 @@ class Car :
         
         if (V_new[0]**2 + V_new[1]**2)**0.5 < 0.1:
             self.pause += 1
-
+            if self.pause > 100 :
+                self.reward -= 1
         else : 
             self.pause = 0
-        
+            
         self.position += V_new
         self.rect = self.img.get_rect(center=self.position)
         
@@ -287,13 +277,8 @@ class Car :
                 
 # =============================== récupération de l'action =============================================
                     
-
-           # if abs(self.dist_max - self.distance_parcouru) < 30 and not map_fini :
-            #    epsilon = 50
-            #else : 
-             #   epsilon = 2
             
-            epsilon = max(max(3,30-self.n_games//100),100-self.n_games//10) #TODO
+            epsilon = max(2,100-self.n_games)#TODO
             
             if random.randint(0,100) > epsilon :
                 action = maximum([self.Q_table1[state][a]+self.Q_table2[state][a] for a in range(6)])[1]
@@ -316,10 +301,7 @@ class Car :
                 droite = False
                 
 # =============================== éxécution de l'action ================================================
-            self.reward = 0
-            
-            if not map_fini and (vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5 > 2.5 and avance == True:
-                self.reward -= 0.005
+            self.reward = -0.05
                 
                 
             if droite and not gauche:
@@ -351,22 +333,33 @@ class Car :
             
             self.distance()
             
-            if self.collision() or self.pause > 100:
-                self.game_over = True
-                
+            if self.collision() :
+                #self.game_over = True
+                self.n_mort += 1
                 self.reward -= 1
                 
-                if self.distance_parcouru > self.dist_max :
-                    self.dist_max += (self.distance_parcouru-self.dist_max)*0.01
-                    #print(self.dist_max)
-
-
+                angle_normale = math.pi/2-math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1], bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])
+                x=int(bord[self.distance_parcouru][0]+math.cos(angle_normale))
+                y=int(bord[self.distance_parcouru][1]+math.sin(angle_normale))
+                if self.collision(x=x,y=y) :
+                    angle_normale = math.pi/2+math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1], bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])
+                    x=bord[self.distance_parcouru][0]+36*math.cos(angle_normale)
+                    y=bord[self.distance_parcouru][1]+36*math.sin(angle_normale)
+                else :
+                    angle_normale = math.pi/2-math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1], bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])
+                    x=bord[self.distance_parcouru][0]+36*math.cos(angle_normale)
+                    y=bord[self.distance_parcouru][1]+36*math.sin(angle_normale)
+                
+                self.position = pygame.Vector2(x, y)
+                self.pos_old = pygame.Vector2(x, y)
+                self.angle = (-math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1],bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])*180/math.pi+360)%360
+                self.vitesse = 0
+                
             self.tour()
             
             if self.quart_tour>11:
                 self.tps = str(round(time.time()-self.tps_debut,1))
                 self.game_over = True
-                self.dist_max = (self.distance_parcouru-self.dist_max)*0.01 # comme il a fini il a distance_parcouru >= dist_max
             #print(state,self.actions[action],self.reward)
             
 # =============================== mise à jour de la Q_table ============================================
@@ -477,8 +470,10 @@ def train():
 
     clock = pygame.time.Clock()
     car.reset()
-    if car.n_games%20==0:
+    if car.n_games%10==0:
         affichage = True
+        save(car.Q_table1, filename="save1.json")
+        save(car.Q_table2, filename="save2.json")
     while not car.game_over :
         for event in pygame.event.get():
             if event.type == pygame.QUIT : # lorsqu'on clique sur la croix rouge
@@ -504,39 +499,26 @@ def train():
             pygame.display.update() #on rafraichit l'écran.
             clock.tick(0)
         
-    if car.quart_tour>11 or map_fini == True:
-        map_fini = True
-        # if car.n_games < 502 :
-        #     map_fini = False
-        if car.quart_tour > 11:
-            scores_plot.append(round(car.n_frame/100,2))
-            print("temps : "+str(round(car.n_frame/100,2)))
-            if car.n_frame/100 < record:
-                record = car.n_frame/100
-            print("record : "+str(round(record,2))+"s")
-        else :
-            print("fail, distance : "+str(round(car.distance_parcouru,2)))
-            print("record : "+str(round(record,2))+"s")
-    else :
-        scores_plot.append(round(car.distance_parcouru,2))
-        print("distance : "+str(round(car.distance_parcouru,2)))
+    scores_plot.append(round(car.n_frame/100,2))
+    print("temps : "+str(round(car.n_frame/100,2)))
+    if car.n_frame/100 < record and car.n_mort == 0:
+        record = car.n_frame/100
+    print("record : "+str(round(record,2))+"s")
     print("taille Q table : "+str(len(car.Q_table1)))
     print()
-    reward_moy.append(car.reward_tot)
+    reward_moy.append(car.n_mort) #car.reward_tot
     score_moy.append(scores_plot[-1])
     while len(score_moy)>100:
         score_moy.pop(0)
     while len(reward_moy)>100:
         reward_moy.pop(0)
     scores_moy_plot.append(round(sum(score_moy)/len(score_moy),2))
-    reward_moy_plot.append(round(sum(reward_moy)/len(reward_moy)*100,2))
+    reward_moy_plot.append(round(sum(reward_moy)/len(reward_moy),2))
     
     plot(scores_plot,scores_moy_plot,reward_moy_plot)
     
     if ancien_affichage != affichage:
         affichage = ancien_affichage
-        save(car.Q_table1, filename="save1.json")
-        save(car.Q_table2, filename="save2.json")
         
 def test():
     global affichage
