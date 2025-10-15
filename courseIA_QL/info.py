@@ -10,11 +10,15 @@ def plot(score, score_moy, reward):
     plt.title('Training...')
     plt.xlabel('Number of games')
     plt.ylabel('Temps')
-    plt.plot(score,"r*")
-    plt.plot(reward,"g")
-    plt.plot(score_moy)
-    #plt.ylim(ymin=0)
+    plt.plot(score,"g*")
+    plt.plot(reward,"r", label="nombre d'accidents")
+    plt.plot(score_moy,"g", label="temps en secondes")
+    plt.ylim(ymin=0,ymax=100)
     plt.xlim(left=0)
-    plt.text(len(score)-1,score[-1],str(score[-1]))
-    plt.text(len(reward)-1,reward[-1],str(reward[-1]))
-    plt.text(len(score_moy)-1, score_moy[-1], str(score_moy[-1]))
+    if score[-1] < 100 :
+        plt.text(len(score)-1,score[-1],str(score[-1]))
+    if reward[-1] < 100 :
+        plt.text(len(reward)-1,reward[-1],str(reward[-1]))
+    if score_moy[-1] < 100 :
+        plt.text(len(score_moy)-1, score_moy[-1], str(score_moy[-1]))
+    plt.legend(loc="upper left")

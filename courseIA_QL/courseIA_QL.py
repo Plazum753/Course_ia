@@ -68,10 +68,12 @@ class Car :
         
         self.actions = ([1,0],[1,1],[1,2],[0,0],[0,1],[0,2])
         
-        self.n_games = 100 #TODO
+        self.n_games = 0 #TODO
         self.lr = 0.01    #max(2*10**-2, 2*10**-1 - self.n_games * 10**-5)
 
         self.gamma = 0.99 # long ou court terme
+        
+        self.map_fini = False
                                                 
     def reset(self):            
         self.reward_tot = 0
@@ -129,22 +131,22 @@ class Car :
         
         self.diff_angle = (-math.atan2(bord[new_dist+1+int(dist_min)][1]-bord[new_dist+int(dist_min)][1],bord[new_dist+1+int(dist_min)][0]-bord[new_dist+int(dist_min)][0])*180/math.pi+360)%360-self.angle
         self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
-                
-        # if dist_min < 18 :
-        #     if self.diff_angle > self.diff_angle_old :
-        #         self.reward += 0.01
-        #     else :
-        #         self.reward -= 0.01
-        # elif dist_min > 54 :
-        #     if self.diff_angle < self.diff_angle_old :
-        #         self.reward += 0.01
-        #     else :
-        #         self.reward -= 0.01
-        # else :
-        #       if abs(self.diff_angle) < abs(self.diff_angle_old):
-        #           self.reward += 0.01
-        #       else :
-        #           self.reward -= 0.01
+        if self.map_fini == False:
+            if dist_min < 18 :
+                if self.diff_angle > self.diff_angle_old :
+                    self.reward += 0.01
+                else :
+                    self.reward -= 0.01
+            elif dist_min > 54 :
+                if self.diff_angle < self.diff_angle_old :
+                    self.reward += 0.01
+                else :
+                    self.reward -= 0.01
+            else :
+                  if abs(self.diff_angle) < abs(self.diff_angle_old):
+                      self.reward += 0.01
+                  else :
+                      self.reward -= 0.01
                       
         self.diff_angle_old = self.diff_angle
                 
@@ -359,6 +361,7 @@ class Car :
             if self.quart_tour>11:
                 self.tps = str(round(time.time()-self.tps_debut,1))
                 self.game_over = True
+                self.map_fini = True
             #print(state,self.actions[action],self.reward)
             
 # =============================== mise à jour de la Q_table ============================================
