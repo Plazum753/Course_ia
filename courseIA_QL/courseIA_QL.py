@@ -69,7 +69,6 @@ class Car :
         self.actions = ([1,0],[1,1],[1,2],[0,0],[0,1],[0,2])
         
         self.n_games = 100 
-        self.lr = 0.1    #max(2*10**-2, 2*10**-1 - self.n_games * 10**-5)
 
         self.gamma = 0.99 # long ou court terme
         
@@ -102,6 +101,7 @@ class Car :
         self.reward = 0
         self.n_mort = 0
         
+        self.lr = max(0.01, 0.1 - self.n_games * 0.0001)
         
         self.Jeux()
     
