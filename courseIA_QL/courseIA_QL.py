@@ -68,7 +68,7 @@ class Car :
         
         self.actions = ([1,0],[1,1],[1,2],[0,0],[0,1],[0,2])
         
-        self.n_games = 0 #TODO
+        self.n_games = 0 
         self.lr = 0.01    #max(2*10**-2, 2*10**-1 - self.n_games * 10**-5)
 
         self.gamma = 0.99 # long ou court terme
@@ -129,26 +129,27 @@ class Car :
             self.dist_bord = self.dist_bord//10.0
         
         
-        self.diff_angle = (-math.atan2(bord[new_dist+1+int(dist_min)][1]-bord[new_dist+int(dist_min)][1],bord[new_dist+1+int(dist_min)][0]-bord[new_dist+int(dist_min)][0])*180/math.pi+360)%360-self.angle
-        self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
-        if self.map_fini == False:
-            if dist_min < 18 :
-                if self.diff_angle > self.diff_angle_old :
-                    self.reward += 0.01
-                else :
-                    self.reward -= 0.01
-            elif dist_min > 54 :
-                if self.diff_angle < self.diff_angle_old :
-                    self.reward += 0.01
-                else :
-                    self.reward -= 0.01
-            else :
-                  if abs(self.diff_angle) < abs(self.diff_angle_old):
-                      self.reward += 0.01
-                  else :
-                      self.reward -= 0.01
+        # self.diff_angle = (-math.atan2(bord[new_dist+1+int(dist_min)][1]-bord[new_dist+int(dist_min)][1],bord[new_dist+1+int(dist_min)][0]-bord[new_dist+int(dist_min)][0])*180/math.pi+360)%360-self.angle
+        # self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
+        
+        # if self.map_fini == False:
+        #     if dist_min < 18 :
+        #         if self.diff_angle > self.diff_angle_old :
+        #             self.reward += 0.0001
+        #         else :
+        #             self.reward -= 0.0001
+        #     elif dist_min > 54 :
+        #         if self.diff_angle < self.diff_angle_old :
+        #             self.reward += 0.0001
+        #         else :
+        #             self.reward -= 0.0001
+        #     else :
+        #           if abs(self.diff_angle) < abs(self.diff_angle_old):
+        #               self.reward += 0.0001
+        #           else :
+        #               self.reward -= 0.0001
                       
-        self.diff_angle_old = self.diff_angle
+        # self.diff_angle_old = self.diff_angle
                 
 # =============================================================================
 
@@ -160,7 +161,7 @@ class Car :
         
         # state
         
-        self.reward += (new_dist-self.distance_parcouru)*0.05
+        self.reward += (new_dist-self.distance_parcouru)*0.001
 
         self.distance_parcouru = new_dist
 
@@ -302,8 +303,12 @@ class Car :
                 droite = False
                 
 # =============================== éxécution de l'action ================================================
-            self.reward = -0.05
-                
+            if not self.map_fini :
+                if (vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5 > 2.5 and avance :
+                    self.reward = -0.001
+            else :
+                self.reward = -0.001
+
                 
             if droite and not gauche:
                 self.rotation_mouvement = -self.maniabilité
