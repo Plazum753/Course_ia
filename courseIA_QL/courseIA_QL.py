@@ -68,8 +68,8 @@ class Car :
         
         self.actions = ([1,0],[1,1],[1,2],[0,0],[0,1],[0,2])
         
-        self.n_games = 0 
-        self.lr = 0.01    #max(2*10**-2, 2*10**-1 - self.n_games * 10**-5)
+        self.n_games = 100 
+        self.lr = 0.1    #max(2*10**-2, 2*10**-1 - self.n_games * 10**-5)
 
         self.gamma = 0.99 # long ou court terme
         
@@ -304,8 +304,8 @@ class Car :
                 
 # =============================== éxécution de l'action ================================================
             if not self.map_fini :
-                if (vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5 > 2.5 and avance :
-                    self.reward = -0.001
+                if (vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5 > 2.01 and avance :
+                    self.reward = -0.01
             else :
                 self.reward = -0.001
 
