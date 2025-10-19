@@ -15,7 +15,7 @@ blanc = (255,255,255)
 Largeur = 976
 Hauteur = 912
 
-terrain = pygame.image.load('map.png') 
+terrain = pygame.image.load('Map.png') 
 terrain = pygame.transform.scale(terrain, (Largeur, Hauteur))
 
 # vitesse normal : 100
