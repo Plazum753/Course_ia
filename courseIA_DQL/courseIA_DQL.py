@@ -6,6 +6,10 @@ from info import plot
 import random
 import json
 
+import torch
+import torch.optim as optim
+import torch.nn as nn
+
 pygame.init()
 
 vert=(0,180,0)
@@ -47,7 +51,7 @@ def maximum(liste):
 
 
 class Car :
-    def __init__(self,x=837,y=440 ,Q_table1 = {}, Q_table2 = {}, voiture = 'f1.png', voiture_taille = 60):        
+    def __init__(self,x=837,y=440 ,Q_table = {}, voiture = 'f1.png', voiture_taille = 60):        
         self.voitureLargeur=1920/voiture_taille #450/16
         self.voitureHauteur=1080/voiture_taille #204/16
         self.img=pygame.image.load(voiture) 
@@ -56,8 +60,7 @@ class Car :
         self.x = x
         self.y = y
         
-        self.Q_table1 = Q_table1.copy()
-        self.Q_table2 = Q_table2.copy()
+        self.Q_table = Q_table.copy()
 
         self.acceleration = 0.1
         self.frein = 0.4/3
@@ -73,6 +76,18 @@ class Car :
         self.gamma = 0.99 # long ou court terme
         
         self.dist_max = 0
+        
+        hidden_dim = 128
+        
+        self.model = nn.Sequential(
+            nn.Linear(in_features=4,out_features=hidden_dim),
+            nn.ReLU(),
+            nn.Linear(in_features=hidden_dim, out_features=hidden_dim),
+            nn.ReLU(),
+            nn.Linear(in_features=hidden_dim, out_features=6)
+            )
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.1)
+        loss_criterion = nn.MSELoss()
                                         
     def reset(self):            
         self.reward_tot = 0
@@ -120,53 +135,19 @@ class Car :
             
         # state
         
-        self.dist_bord = dist_min
-        dist_centre = abs(dist_min-36)
+        self.dist_bord = dist_min/100
         
-        if self.dist_bord > 70:
-            self.dist_bord = 7.0
-        else :
-            self.dist_bord = self.dist_bord//10.0
-        
-        
-        self.diff_angle = (-math.atan2(bord[new_dist+1+int(dist_min)][1]-bord[new_dist+int(dist_min)][1],bord[new_dist+1+int(dist_min)][0]-bord[new_dist+int(dist_min)][0])*180/math.pi+360)%360-self.angle
+        self.diff_angle = (-math.atan2(bord[new_dist+1][1]-bord[new_dist][1],bord[new_dist+1][0]-bord[new_dist][0])*180/math.pi+360)%360-self.angle
         self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
+        self.diff_angle = (self.diff_angle+180)/360 # normalisation  
                 
-        if self.n_games<600 :
-            if dist_min < 54 :
-                if abs(self.diff_angle) < abs(self.diff_angle_old):
-                    self.reward += 1
-                else :
-                    self.reward -= 1
-            else :
-                if self.diff_angle < self.diff_angle_old :
-                    self.reward += 1
-                else :
-                    self.reward -= 1
-                    
-        self.diff_angle_old = self.diff_angle
-                
-# =============================================================================
-
         self.diff_angle_devant = (-math.atan2(bord[new_dist+76][1]-bord[new_dist+75][1],bord[new_dist+76][0]-bord[new_dist+75][0])*180/math.pi+360)%360-self.angle
         self.diff_angle_devant = (self.diff_angle_devant+540)%360-180 # intervalle [-180, 180[
-        
-        
-        self.diff_angle_devant = max(-16.0 ,min(15.0, self.diff_angle_devant//6.0)) # -90 à 90; 32 possibilités
-        
+        self.diff_angle_devant = (self.diff_angle_devant+180)/360 # normalisation  
+    
         # state
         
-        
-        self.reward += (new_dist-self.distance_parcouru)
-                 
-        if self.n_games<2000 :
-            if dist_centre < self.dist_centre_old : 
-                self.reward += 1
-            elif dist_centre > self.dist_centre_old :
-                self.reward -= 1
-                
-        self.dist_centre_old = dist_centre
-        
+        self.reward += (new_dist-self.distance_parcouru)*0.001
         
         self.distance_parcouru = new_dist
 
@@ -194,7 +175,8 @@ class Car :
         
         if (V_new[0]**2 + V_new[1]**2)**0.5 < 0.1:
             self.pause += 1
-
+            if self.pause > 100 :
+                self.reward -= 1
         else : 
             self.pause = 0
         
@@ -270,33 +252,19 @@ class Car :
 
             vitesse_actuelle = self.position - self.pos_old
                      
-            state = ((vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5//1.01, # 0 à 3 : 4 possibilitées
-                     self.dist_bord,  # 0 à 7 : 8 possibilitées
-                     self.diff_angle_devant)  # -16 à 15 : 32 possibilitées
-            # total : 4*8*32 = 1024 possibilitées
-            
-
-            if state not in self.Q_table1 :
-                self.Q_table1[state] = [0 for i in range(6)]
-            if state not in self.Q_table2 :
-                self.Q_table2[state] = [0 for i in range(6)]
+            state = ((vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5/4,
+                     self.dist_bord,
+                     self.diff_angle,
+                     self.diff_angle_devant)
                 
 # =============================== récupération de l'action =============================================
-                    
-
-           # if abs(self.dist_max - self.distance_parcouru) < 30 and not map_fini :
-            #    epsilon = 50
-            #else : 
-             #   epsilon = 2
             
-            epsilon = max(max(3,30-self.n_games//100),100-self.n_games//10) #TODO
+            epsilon = max(2,100-self.n_games)#TODO
             
             if random.randint(0,100) > epsilon :
-                action = maximum([self.Q_table1[state][a]+self.Q_table2[state][a] for a in range(6)])[1]
+                action = maximum(self.Q_table[state])[1]
             else :
                 action = random.randint(0,5) 
-
-                
 
             if self.actions[action][0] == 1:
                 avance = True
@@ -312,11 +280,7 @@ class Car :
                 droite = False
                 
 # =============================== éxécution de l'action ================================================
-            self.reward = 0
-            
-            if self.n_games<600 and (vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5 > 2.5 and avance == True:
-                self.reward -= 2
-                
+            self.reward = 0.001
                 
             if droite and not gauche:
                 self.rotation_mouvement = -self.maniabilité
@@ -350,7 +314,7 @@ class Car :
             if self.collision() or self.pause > 100:
                 self.game_over = True
                 
-                self.reward -= 200
+                self.reward -= 1
                 
                 if self.distance_parcouru > self.dist_max :
                     self.dist_max += (self.distance_parcouru-self.dist_max)*0.01
@@ -369,19 +333,16 @@ class Car :
 
             vitesse_actuelle = self.position - self.pos_old
                             
-            state_new = ((vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5//1.01,
+            state_new = ((vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5/4,
                      self.dist_bord,
+                     self.diff_angle,
                      self.diff_angle_devant)
 
-            if state_new not in self.Q_table1 :
-                self.Q_table1[state_new] = [0 for i in range(6)]
-            if state_new not in self.Q_table2 :
-                self.Q_table2[state_new] = [0 for i in range(6)]
+            if state_new not in self.Q_table :
+                self.Q_table[state_new] = [0 for i in range(6)]
+
                 
-            if random.randint(0,1)%2 == 0:
-                self.Q_table1[state][action] += self.lr * (self.reward + self.gamma * self.Q_table2[state_new][maximum(self.Q_table1[state_new])[1]] - self.Q_table1[state][action])
-            else :
-                self.Q_table2[state][action] += self.lr * (self.reward + self.gamma * self.Q_table1[state_new][maximum(self.Q_table2[state_new])[1]] - self.Q_table2[state][action])
+            self.Q_table[state][action] += self.lr * (self.reward + self.gamma * self.Q_table[state_new][maximum(self.Q_table[state_new])[1]] - self.Q_table[state][action])
 
             self.reward_tot += self.reward
             self.n_frame += 1
@@ -447,11 +408,10 @@ map_fini = False
 
 car = Car()
 
-sauvegarde1 = load(filename="save1.json")
-sauvegarde2 = load(filename="save2.json")
+sauvegarde = load(filename="save1.json")
 
-if sauvegarde1 != None and sauvegarde2 != None:
-    car=Car(Q_table1=sauvegarde1, Q_table2=sauvegarde2)
+if sauvegarde != None :
+    car=Car(Q_table=sauvegarde)
     
 
 
@@ -516,7 +476,6 @@ def train():
     else :
         scores_plot.append(round(car.distance_parcouru,2))
         print("distance : "+str(round(car.distance_parcouru,2)))
-    print("taille Q table : "+str(len(car.Q_table1)))
     print()
     reward_moy.append(car.reward_tot)
     score_moy.append(scores_plot[-1])
@@ -531,8 +490,7 @@ def train():
     
     if ancien_affichage != affichage:
         affichage = ancien_affichage
-        save(car.Q_table1, filename="save1.json")
-        save(car.Q_table2, filename="save2.json")
+        save(car.Q_table, filename="save.json")
         
 def test():
     global affichage
