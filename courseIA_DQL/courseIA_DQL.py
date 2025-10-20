@@ -19,7 +19,7 @@ blanc = (255,255,255)
 Largeur = 976
 Hauteur = 912
 
-terrain = pygame.image.load('map.png') 
+terrain = pygame.image.load('Map.png') 
 terrain = pygame.transform.scale(terrain, (Largeur, Hauteur))
 
 # vitesse normal : 100
@@ -73,10 +73,13 @@ class Car :
         
         self.n_games = 0
         
+        self.batch_size = 64
+        
+        self.replay_buffer = []
+        self.replay_buffer_size = 50_000
+        
         self.gamma = 0.99 # long ou court terme
-        
-        self.dist_max = 0
-        
+                
         hidden_dim = 128
         
         self.model = nn.Sequential(
@@ -87,7 +90,7 @@ class Car :
             nn.Linear(in_features=hidden_dim, out_features=6)
             )
         self.optimizer = optim.SGD(self.model.parameters(), lr=0.1)
-        loss_criterion = nn.MSELoss()
+        self.loss_criterion = nn.MSELoss()
                                         
     def reset(self):            
         self.reward_tot = 0
@@ -114,6 +117,7 @@ class Car :
         self.distance_parcouru = 0
         self.distance()
         self.reward = 0
+        self.n_mort = 0
         
         self.lr = max(0.001, 0.01 - self.n_games * 2*10**-6)
         
@@ -262,7 +266,8 @@ class Car :
             epsilon = max(2,100-self.n_games)#TODO
             
             if random.randint(0,100) > epsilon :
-                action = maximum(self.Q_table[state])[1]
+                with torch.no_grad():
+                    action = torch.argmax(self.model(torch.tensor(state))).item()
             else :
                 action = random.randint(0,5) 
 
@@ -312,24 +317,35 @@ class Car :
             self.distance()
             
             if self.collision() or self.pause > 100:
-                self.game_over = True
-                
+                #self.game_over = True
+                self.n_mort += 1
                 self.reward -= 1
                 
-                if self.distance_parcouru > self.dist_max :
-                    self.dist_max += (self.distance_parcouru-self.dist_max)*0.01
-                    #print(self.dist_max)
-
+                angle_normale = math.pi/2-math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1], bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])
+                x=int(bord[self.distance_parcouru][0]+math.cos(angle_normale))
+                y=int(bord[self.distance_parcouru][1]+math.sin(angle_normale))
+                if self.collision(x=x,y=y) :
+                    angle_normale = math.pi/2+math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1], bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])
+                    x=bord[self.distance_parcouru][0]+36*math.cos(angle_normale)
+                    y=bord[self.distance_parcouru][1]+36*math.sin(angle_normale)
+                else :
+                    angle_normale = math.pi/2-math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1], bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])
+                    x=bord[self.distance_parcouru][0]+36*math.cos(angle_normale)
+                    y=bord[self.distance_parcouru][1]+36*math.sin(angle_normale)
+                
+                self.position = pygame.Vector2(x, y)
+                self.pos_old = pygame.Vector2(x, y)
+                self.angle = (-math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1],bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])*180/math.pi+360)%360
+                self.vitesse = 0
 
             self.tour()
             
             if self.quart_tour>11:
                 self.tps = str(round(time.time()-self.tps_debut,1))
                 self.game_over = True
-                self.dist_max = (self.distance_parcouru-self.dist_max)*0.01 # comme il a fini il a distance_parcouru >= dist_max
             #print(state,self.actions[action],self.reward)
             
-# =============================== mise à jour de la Q_table ============================================
+# =============================== mise à jour du model ============================================
 
             vitesse_actuelle = self.position - self.pos_old
                             
@@ -338,12 +354,27 @@ class Car :
                      self.diff_angle,
                      self.diff_angle_devant)
 
-            if state_new not in self.Q_table :
-                self.Q_table[state_new] = [0 for i in range(6)]
-
+            self.replay_buffer.append((state, action, self.reward, state_new))
+            if len(self.replay_buffer) > self.replay_buffer_size :
+                self.replay_buffer.pop(0)
                 
-            self.Q_table[state][action] += self.lr * (self.reward + self.gamma * self.Q_table[state_new][maximum(self.Q_table[state_new])[1]] - self.Q_table[state][action])
-
+            if self.n_frame % 4 == 0 and len(self.replay_buffer) > self.batch_size :
+                batch = random.sample(self.replay_buffer, self.batch_size)
+                L_new_state = torch.tensor([e[3] for e in batch], dtype=torch.float32)
+                with torch.no_grad():
+                    esperances_new_state = self.model(L_new_state)
+                target = torch.tensor([self.gamma*torch.max(esperances_new_state[i]) + batch[i][2] for i in range(self.batch_size)], dtype=torch.float32)
+                
+                L_state = torch.tensor([e[0] for e in batch], dtype=torch.float32)
+                esperances = self.model(L_state)
+                L_actions = torch.tensor([e[1] for e in batch], dtype=torch.long).unsqueeze(1)
+                pred = esperances.gather(1, L_actions).squeeze(1) 
+                
+                loss = self.loss_criterion(pred, target)
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                
             self.reward_tot += self.reward
             self.n_frame += 1
 
@@ -384,34 +415,34 @@ def centre_piste():
 
 bord = centre_piste()
 
-def save(Q_table, filename="save.json"):
-    try:
-        with open(filename, "w") as f:
-            json.dump({"Q_table": list(Q_table.items())}, f)
-    except Exception as e:
-        print("❌ Erreur lors de la sauvegarde :", e)
+# def save(Q_table, filename="save.json"):
+#     try:
+#         with open(filename, "w") as f:
+#             json.dump({"Q_table": list(Q_table.items())}, f)
+#     except Exception as e:
+#         print("❌ Erreur lors de la sauvegarde :", e)
         
-def load(filename="save.json"):
-    try:
-        with open(filename, "r") as f:
-            data = json.load(f)
-        Q_table = {tuple(k): v for k, v in data["Q_table"]}
-        print(f"✅ Q-table chargée depuis {filename}")
-        return Q_table
-    except Exception as e:
-        print("❌ Erreur lors du chargement de la Q-table :", e)
-        return {}
+# def load(filename="save.json"):
+#     try:
+#         with open(filename, "r") as f:
+#             data = json.load(f)
+#         Q_table = {tuple(k): v for k, v in data["Q_table"]}
+#         print(f"✅ Q-table chargée depuis {filename}")
+#         return Q_table
+#     except Exception as e:
+#         print("❌ Erreur lors du chargement de la Q-table :", e)
+#         return {}
     
     
-affichage = False #TODO
+affichage = True #TODO
 map_fini = False
 
 car = Car()
 
-sauvegarde = load(filename="save1.json")
+# sauvegarde = load(filename="save1.json")
 
-if sauvegarde != None :
-    car=Car(Q_table=sauvegarde)
+# if sauvegarde != None :
+#     car=Car(Q_table=sauvegarde)
     
 
 
@@ -433,8 +464,10 @@ def train():
 
     clock = pygame.time.Clock()
     car.reset()
-    if car.n_games%20==0:
+    if car.n_games%10==0:
         affichage = True
+        # save(car.Q_table, filename="save.json")
+        
     while not car.game_over :
         for event in pygame.event.get():
             if event.type == pygame.QUIT : # lorsqu'on clique sur la croix rouge
@@ -450,8 +483,10 @@ def train():
                     
             if car.quart_tour<0:
                 affiche("Tour : 0/3",(Largeur-60,25))
+            elif car.quart_tour > 11:
+                affiche("Tour : 3/3",(Largeur-60,25))
             else:
-                affiche("Tour :"+str(car.quart_tour//4)+"/3",(Largeur-60,25))
+                affiche("Tour :"+str(car.quart_tour//4+1)+"/3",(Largeur-60,25))
             if car.tps_debut == -1 :
                 affiche("Chrono : 0s",(Largeur-75,50))
             else :
@@ -460,24 +495,13 @@ def train():
             pygame.display.update() #on rafraichit l'écran.
             clock.tick(0)
         
-    if car.quart_tour>11 or map_fini == True:
-        map_fini = True
-        # if car.n_games < 502 :
-        #     map_fini = False
-        if car.quart_tour > 11:
-            scores_plot.append(round(car.n_frame/100,2))
-            print("temps : "+str(round(car.n_frame/100,2)))
-            if car.n_frame/100 < record:
-                record = car.n_frame/100
-            print("record : "+str(round(record,2))+"s")
-        else :
-            print("fail, distance : "+str(round(car.distance_parcouru,2)))
-            print("record : "+str(round(record,2))+"s")
-    else :
-        scores_plot.append(round(car.distance_parcouru,2))
-        print("distance : "+str(round(car.distance_parcouru,2)))
+    scores_plot.append(round(car.n_frame/100,2))
+    print("temps : "+str(round(car.n_frame/100,2)))
+    if car.n_frame/100 < record and car.n_mort == 0:
+        record = car.n_frame/100
+    print("record : "+str(round(record,2))+"s")
     print()
-    reward_moy.append(car.reward_tot)
+    reward_moy.append(car.n_mort) #car.reward_tot
     score_moy.append(scores_plot[-1])
     while len(score_moy)>100:
         score_moy.pop(0)
@@ -490,7 +514,6 @@ def train():
     
     if ancien_affichage != affichage:
         affichage = ancien_affichage
-        save(car.Q_table, filename="save.json")
         
 def test():
     global affichage
