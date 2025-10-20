@@ -4,11 +4,13 @@ import math
 import time
 from info import plot
 import random
-import json
 
 import torch
 import torch.optim as optim
 import torch.nn as nn
+
+from numba import njit
+import numpy as np
 
 pygame.init()
 
@@ -21,6 +23,7 @@ Hauteur = 912
 
 terrain = pygame.image.load('Map.png') 
 terrain = pygame.transform.scale(terrain, (Largeur, Hauteur))
+terrain_array = pygame.surfarray.array3d(terrain)
 
 # vitesse normal : 100
 SPEED = 100
@@ -39,15 +42,44 @@ def affiche(text, position, color = noir, taille = 20):
         Zone_jeu.blit(texte,zoneTexte)
         #pygame.display.update() #Mise à jour de la fenêtre
 
-def maximum(liste):
-    maxi = liste[0]
-    indice = 0
+# ============================= foction du programme ================================================
+
+# distance
+@njit
+def dist(np_bord, new_dist, pos_x, pos_y, i_min, i_max, angle):
+    dist_min = ((np_bord[new_dist][0]-pos_x)**2 + (np_bord[new_dist][1]-pos_y)**2)**0.5
+    for i in range(i_min, i_max):
+        if ((np_bord[i][0]-pos_x)**2 + (np_bord[i][1]-pos_y)**2)**0.5 < dist_min:
+            dist_min = ((np_bord[i][0]-pos_x)**2 + (np_bord[i][1]-pos_y)**2)**0.5
+            new_dist = i
+            
+            
+    diff_angle = (-math.atan2(np_bord[new_dist+1][1]-np_bord[new_dist][1],np_bord[new_dist+1][0]-np_bord[new_dist][0])*180/math.pi+360)%360-angle
+    diff_angle = (diff_angle+540)%360-180 # intervalle [-180, 180[
+    diff_angle = (diff_angle+180)/360 # normalisation  
+            
+    diff_angle_devant = (-math.atan2(np_bord[new_dist+76][1]-np_bord[new_dist+75][1],np_bord[new_dist+76][0]-np_bord[new_dist+75][0])*180/math.pi+360)%360-angle
+    diff_angle_devant = (diff_angle_devant+540)%360-180 # intervalle [-180, 180[
+    diff_angle_devant = (diff_angle_devant+180)/360 # normalisation  
     
-    for _ in range(1,len(liste)):
-        if maxi < liste[_]:
-            maxi = liste[_]
-            indice = _
-    return (maxi,indice)
+    return new_dist, dist_min/100, diff_angle, diff_angle_devant
+
+# avancer
+@njit
+def calcul_avancer(pos, pos_old, angle, adherence, vitesse):
+    angle_rad = math.radians(-angle)
+            
+    vitesse_actuelle = (pos[0] - pos_old[0], pos[1] - pos_old[1])
+    
+    V_new_x = vitesse_actuelle[0] + adherence*(math.cos(angle_rad) * vitesse - vitesse_actuelle[0])
+    V_new_y= vitesse_actuelle[1] + adherence*(math.sin(angle_rad) * vitesse - vitesse_actuelle[1])
+    
+    new_pos = (pos[0] + V_new_x, pos[1] + V_new_y)
+    
+    return new_pos, (V_new_x**2 + V_new_y**2)**0.5
+        
+        
+# =============================================================================
 
 
 class Car :
@@ -79,17 +111,18 @@ class Car :
         self.replay_buffer_size = 50_000
         
         self.gamma = 0.99 # long ou court terme
-                
-        hidden_dim = 128
-        
+                        
         self.model = nn.Sequential(
-            nn.Linear(in_features=4,out_features=hidden_dim),
+            nn.Linear(in_features=4,out_features=128),
             nn.ReLU(),
-            nn.Linear(in_features=hidden_dim, out_features=hidden_dim),
+            nn.Linear(in_features=128, out_features=128),
             nn.ReLU(),
-            nn.Linear(in_features=hidden_dim, out_features=6)
+            nn.Linear(in_features=128, out_features=64),
+            nn.ReLU(),
+            nn.Linear(in_features=64, out_features=6)
             )
-        self.optimizer = optim.SGD(self.model.parameters(), lr=0.1)
+        
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0005)  
         self.loss_criterion = nn.MSELoss()
                                         
     def reset(self):            
@@ -102,7 +135,7 @@ class Car :
 
         self.game_over = False
         self.vitesse = 0         # Vitesse actuelle
-        self.pos_old = pygame.Vector2(self.position[0],self.position[1])
+        self.pos_old = self.position
         self.quart_tour = -1
         self.rotation_mouvement = 0
         self.tps_debut = -1
@@ -118,38 +151,19 @@ class Car :
         self.distance()
         self.reward = 0
         self.n_mort = 0
-        
-        self.lr = max(0.001, 0.01 - self.n_games * 2*10**-6)
-        
+                
         self.Jeux()
     
     def distance(self):
         global bord
-        
+        global np_bord
         new_dist = self.distance_parcouru
-        dist_min = ((bord[new_dist][0]-self.position[0])**2 + (bord[new_dist][1]-self.position[1])**2)**0.5
-        
+
         i_min = max(0, self.distance_parcouru - 100)
         i_max = min(len(bord), self.distance_parcouru + 200)
         
-        for i in range(i_min, i_max):
-            if ((bord[i][0]-self.position[0])**2 + (bord[i][1]-self.position[1])**2)**0.5 < dist_min:
-                dist_min = ((bord[i][0]-self.position[0])**2 + (bord[i][1]-self.position[1])**2)**0.5
-                new_dist = i
-            
-        # state
+        new_dist, self.dist_bord, self.diff_angle, self.diff_angle_devant  = dist(np_bord, new_dist, self.position[0], self.position[1], i_min, i_max, self.angle)
         
-        self.dist_bord = dist_min/100
-        
-        self.diff_angle = (-math.atan2(bord[new_dist+1][1]-bord[new_dist][1],bord[new_dist+1][0]-bord[new_dist][0])*180/math.pi+360)%360-self.angle
-        self.diff_angle = (self.diff_angle+540)%360-180 # intervalle [-180, 180[
-        self.diff_angle = (self.diff_angle+180)/360 # normalisation  
-                
-        self.diff_angle_devant = (-math.atan2(bord[new_dist+76][1]-bord[new_dist+75][1],bord[new_dist+76][0]-bord[new_dist+75][0])*180/math.pi+360)%360-self.angle
-        self.diff_angle_devant = (self.diff_angle_devant+540)%360-180 # intervalle [-180, 180[
-        self.diff_angle_devant = (self.diff_angle_devant+180)/360 # normalisation  
-    
-        # state
         
         self.reward += (new_dist-self.distance_parcouru)*0.001
         
@@ -157,56 +171,42 @@ class Car :
 
             
     def tourner(self, degre):
+        global affichage
         self.angle += degre
         self.angle = self.angle%360
         
         # Rotation de l'image
-        self.img = pygame.transform.rotate(self.img_origine, self.angle)
+        if affichage == True:
+            self.img = pygame.transform.rotate(self.img_origine, self.angle)
         
-        # Obtenir le nouveau rect et recentrer l'image
-        self.rect = self.img.get_rect(center=self.position)
+            # Obtenir le nouveau rect et recentrer l'image
+            self.rect = self.img.get_rect(center=self.position)
         
     def avancer(self):
-        angle_rad = math.radians(-self.angle)
+        new_position, V = calcul_avancer((self.position.x,self.position.y), (self.pos_old.x,self.pos_old.y), self.angle, self.adherence, self.vitesse)
+        self.pos_old = self.position
+        self.position = pygame.Vector2(new_position[0],new_position[1])
+        if affichage == True:
+            self.rect = self.img.get_rect(center=self.position)
         
-        direction = pygame.Vector2(math.cos(angle_rad), math.sin(angle_rad))
-        
-        vitesse_actuelle = self.position - self.pos_old
-        
-        self.pos_old = pygame.Vector2(self.position[0],self.position[1])
-        
-        V_new = vitesse_actuelle + self.adherence*(direction * self.vitesse - vitesse_actuelle)
-        
-        if (V_new[0]**2 + V_new[1]**2)**0.5 < 0.1:
+        if V < 0.1:
             self.pause += 1
             if self.pause > 100 :
                 self.reward -= 1
+                if self.pause > 20_000 :
+                    self.game_over = True
         else : 
             self.pause = 0
-        
-        self.position += V_new
-        self.rect = self.img.get_rect(center=self.position)
         
     def collision(self, couleur=(12,190,0), x=None, y=None):
         if x == None:
             x, y = int(self.position.x), int(self.position.y)
-        
         if not (0 <= x < Largeur and 0 <= y < Hauteur):
-            return True
-    
-        pixel = terrain.get_at((x, y)) # donne la couleur du pixel du centre de la voiture
-        
-        count = 0
-        for c in range(3):
-            if couleur[c]-20<pixel[c]<couleur[c]+20:
-                count+=1
-        if count == 3:
-            return True
-        return False
+            return True    
+        return np.all(np.abs(terrain_array[x, y] - couleur) < 20)
         
 
     def tour(self):
-        # quart_tour_old = self.quart_tour
         
         if self.quart_tour%4==3:
             if self.position[1]<425 and self.position[0]>2*Largeur/3: # en haut à droite
@@ -240,23 +240,17 @@ class Car :
         if self.quart_tour%4==2:
             if self.position[1]<425 and self.position[0]<2*Largeur/3: # en haut à gauche
                 self.quart_tour -= 1
-
-        # if quart_tour_old < self.quart_tour :
-        #     self.reward += 50
-        # elif quart_tour_old > self.quart_tour :
-        #     self.reward -= 50
             
     def Jeux(self):
         global map_fini
         
         if not self.game_over: 
-        
             
 # =============================== récupération de state ================================================
 
             vitesse_actuelle = self.position - self.pos_old
                      
-            state = ((vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5/4,
+            state = ((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4,
                      self.dist_bord,
                      self.diff_angle,
                      self.diff_angle_devant)
@@ -285,7 +279,7 @@ class Car :
                 droite = False
                 
 # =============================== éxécution de l'action ================================================
-            self.reward = 0.001
+            self.reward = -0.001
                 
             if droite and not gauche:
                 self.rotation_mouvement = -self.maniabilité
@@ -349,7 +343,7 @@ class Car :
 
             vitesse_actuelle = self.position - self.pos_old
                             
-            state_new = ((vitesse_actuelle[0]**2+vitesse_actuelle[1]**2)**0.5/4,
+            state_new = ((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4,
                      self.dist_bord,
                      self.diff_angle,
                      self.diff_angle_devant)
@@ -414,6 +408,7 @@ def centre_piste():
     return tuple(bord[-100:]+bord+bord+bord+bord[:200]) # il faut une marge | bord[-100:] la voiture commence avant la ligne d'arrivée
 
 bord = centre_piste()
+np_bord = np.array(bord)
 
 # def save(Q_table, filename="save.json"):
 #     try:
@@ -434,7 +429,7 @@ bord = centre_piste()
 #         return {}
     
     
-affichage = True #TODO
+affichage = False #TODO
 map_fini = False
 
 car = Car()
