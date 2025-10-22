@@ -54,8 +54,8 @@ def dist(np_bord, np_bord_ext, new_dist, pos_x, pos_y, i_min, i_max, angle):
             new_dist = i
 
     angle_normale = np.atan2(np_bord[new_dist][1]-np_bord_ext[new_dist][1],np_bord[new_dist][0]-np_bord_ext[new_dist][0])
-    plus = (np_bord[new_dist][0]+10*np.cos(angle_normale+np.pi/2)-np_bord[new_dist+10][0])**2 + (np_bord[new_dist][0]+10*np.sin(angle_normale+np.pi/2)-np_bord[new_dist+10][1])**2 
-    moins = (np_bord[new_dist][0]+10*np.cos(angle_normale-np.pi/2)-np_bord[new_dist+10][0])**2 + (np_bord[new_dist][0]+10*np.sin(angle_normale-np.pi/2)-np_bord[new_dist+10][1])**2 
+    plus = (np_bord[new_dist][0]+10*np.cos(angle_normale+np.pi/2)-np_bord[new_dist+10][0])**2 + (np_bord[new_dist][1]+10*np.sin(angle_normale+np.pi/2)-np_bord[new_dist+10][1])**2 
+    moins = (np_bord[new_dist][0]+10*np.cos(angle_normale-np.pi/2)-np_bord[new_dist+10][0])**2 + (np_bord[new_dist][1]+10*np.sin(angle_normale-np.pi/2)-np_bord[new_dist+10][1])**2 
     if plus > moins :
         angle_target = np.atan2(np_bord[new_dist][1]-np_bord_ext[new_dist][1],np_bord[new_dist][0]-np_bord_ext[new_dist][0])+np.pi/2
     else:
@@ -72,13 +72,13 @@ def dist(np_bord, np_bord_ext, new_dist, pos_x, pos_y, i_min, i_max, angle):
 @njit
 def calcul_angle(np_bord, np_bord_ext, distance_parcouru):
     angle_normale = np.atan2(np_bord[distance_parcouru][1]-np_bord_ext[distance_parcouru][1],np_bord[distance_parcouru][0]-np_bord_ext[distance_parcouru][0])
-    plus = (np_bord[distance_parcouru][0]+10*np.cos(angle_normale+np.pi/2)-np_bord[distance_parcouru+10][0])**2 + (np_bord[distance_parcouru][0]+10*np.sin(angle_normale+np.pi/2)-np_bord[distance_parcouru+10][1])**2 
-    moins = (np_bord[distance_parcouru][0]+10*np.cos(angle_normale-np.pi/2)-np_bord[distance_parcouru+10][0])**2 + (np_bord[distance_parcouru][0]+10*np.sin(angle_normale-np.pi/2)-np_bord[distance_parcouru+10][1])**2 
-    if plus > moins :
+    plus = (np_bord[distance_parcouru][0]+10*np.cos(angle_normale+np.pi/2)-np_bord[distance_parcouru+10][0])**2 + (np_bord[distance_parcouru][1]+10*np.sin(angle_normale+np.pi/2)-np_bord[distance_parcouru+10][1])**2 
+    moins = (np_bord[distance_parcouru][0]+10*np.cos(angle_normale-np.pi/2)-np_bord[distance_parcouru+10][0])**2 + (np_bord[distance_parcouru][1]+10*np.sin(angle_normale-np.pi/2)-np_bord[distance_parcouru+10][1])**2 
+    if plus < moins :
         angle_target = np.atan2(np_bord[distance_parcouru][1]-np_bord_ext[distance_parcouru][1],np_bord[distance_parcouru][0]-np_bord_ext[distance_parcouru][0])+np.pi/2
     else:
         angle_target = np.atan2(np_bord[distance_parcouru][1]-np_bord_ext[distance_parcouru][1],np_bord[distance_parcouru][0]-np_bord_ext[distance_parcouru][0])-np.pi/2
-    angle_target = np.degrees(angle_target)
+    angle_target = np.degrees(-angle_target)
     
     return angle_target
 
@@ -340,7 +340,6 @@ class Car :
                 #self.game_over = True
                 self.n_mort += 1
                 self.reward -= 1
-                self.distance_parcouru += 10
                 
                 x = (np_bord[self.distance_parcouru][0]+np_bord_ext[self.distance_parcouru][0])/2
                 y = (np_bord[self.distance_parcouru][1]+np_bord_ext[self.distance_parcouru][1])/2  
@@ -350,6 +349,7 @@ class Car :
                 pygame.draw.rect(terrain, (255,0,0), (np_bord[self.distance_parcouru][0],np_bord[self.distance_parcouru][1],2,2), 2)
                 pygame.draw.rect(terrain, (255,0,0), (np_bord_ext[self.distance_parcouru][0],np_bord_ext[self.distance_parcouru][1],2,2), 2)
                 self.angle = calcul_angle(np_bord, np_bord_ext, self.distance_parcouru)
+
                 self.vitesse = 0
 
             self.quart_tour = tour(self.quart_tour,(self.position.x, self.position.y), Largeur)
@@ -429,17 +429,19 @@ def centre_piste():
         point = point_new(point)
         #pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
     
-    ind = len(bord_ext0)-1
     bord_ext = []
-    for p in bord : 
-        mini = bord_ext0[ind-1]
-        if (mini[0]-p[0])**2+(mini[1]-p[1])**2 < (bord_ext0[ind][0]-p[0])**2+(bord_ext0[ind][1]-p[1])**2 :
-            ind -= 1
-        ind -= 1
-        bord_ext.append(bord_ext0[ind+1])
+    frequence = len(bord_ext0)/(len(bord_ext0)-len(bord))
+    compteur = 0
+    for i in range(len(bord_ext0)):
+        if i > compteur :
+            compteur += frequence
+        else :
+            bord_ext.append(bord_ext0[i])
+            #pygame.draw.rect(terrain, (255,0,0), (bord_ext0[i][0],bord_ext0[i][1],2,2), 2)
+    bord_ext.reverse()
+    
     bord2 = tuple(bord[-100:]+bord+bord+bord+bord[:200]) # il faut une marge | bord[-100:] la voiture commence avant la ligne d'arrivée
     bord_ext2 = tuple(bord_ext[-100:]+bord_ext+bord_ext+bord_ext+bord_ext[:200]) 
-    print(len(bord2),len(bord_ext2))
     return bord2, bord_ext2
 
 bord, bord_ext = centre_piste()
@@ -459,7 +461,7 @@ def load(car, filename="save.pth"):
         return None
     
     
-affichage = True #TODO
+affichage = False #TODO
 map_fini = False
 
 car = Car()
