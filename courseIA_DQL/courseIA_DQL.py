@@ -23,7 +23,7 @@ Hauteur = 912
 
 terrain = pygame.image.load('Map.png') 
 terrain = pygame.transform.scale(terrain, (Largeur, Hauteur))
-terrain_array = pygame.surfarray.array3d(terrain)
+terrain_array = pygame.surfarray.array3d(terrain).astype(np.int16)
 
 # vitesse normal : 100
 SPEED = 100
@@ -46,23 +46,41 @@ def affiche(text, position, color = noir, taille = 20):
 
 # distance
 @njit
-def dist(np_bord, new_dist, pos_x, pos_y, i_min, i_max, angle):
+def dist(np_bord, np_bord_ext, new_dist, pos_x, pos_y, i_min, i_max, angle):
     dist_min = ((np_bord[new_dist][0]-pos_x)**2 + (np_bord[new_dist][1]-pos_y)**2)**0.5
     for i in range(i_min, i_max):
         if ((np_bord[i][0]-pos_x)**2 + (np_bord[i][1]-pos_y)**2)**0.5 < dist_min:
             dist_min = ((np_bord[i][0]-pos_x)**2 + (np_bord[i][1]-pos_y)**2)**0.5
             new_dist = i
-            
-            
-    diff_angle = (-math.atan2(np_bord[new_dist+1][1]-np_bord[new_dist][1],np_bord[new_dist+1][0]-np_bord[new_dist][0])*180/math.pi+360)%360-angle
+
+    angle_normale = np.atan2(np_bord[new_dist][1]-np_bord_ext[new_dist][1],np_bord[new_dist][0]-np_bord_ext[new_dist][0])
+    plus = (np_bord[new_dist][0]+10*np.cos(angle_normale+np.pi/2)-np_bord[new_dist+10][0])**2 + (np_bord[new_dist][0]+10*np.sin(angle_normale+np.pi/2)-np_bord[new_dist+10][1])**2 
+    moins = (np_bord[new_dist][0]+10*np.cos(angle_normale-np.pi/2)-np_bord[new_dist+10][0])**2 + (np_bord[new_dist][0]+10*np.sin(angle_normale-np.pi/2)-np_bord[new_dist+10][1])**2 
+    if plus > moins :
+        angle_target = np.atan2(np_bord[new_dist][1]-np_bord_ext[new_dist][1],np_bord[new_dist][0]-np_bord_ext[new_dist][0])+np.pi/2
+    else:
+        angle_target = np.atan2(np_bord[new_dist][1]-np_bord_ext[new_dist][1],np_bord[new_dist][0]-np_bord_ext[new_dist][0])-np.pi/2
+    angle_target = np.degrees(angle_target)
+
+    diff_angle = angle_target - angle
     diff_angle = (diff_angle+540)%360-180 # intervalle [-180, 180[
     diff_angle = (diff_angle+180)/360 # normalisation  
-            
-    diff_angle_devant = (-math.atan2(np_bord[new_dist+76][1]-np_bord[new_dist+75][1],np_bord[new_dist+76][0]-np_bord[new_dist+75][0])*180/math.pi+360)%360-angle
-    diff_angle_devant = (diff_angle_devant+540)%360-180 # intervalle [-180, 180[
-    diff_angle_devant = (diff_angle_devant+180)/360 # normalisation  
+
+    return new_dist, dist_min/100, diff_angle
+
+# angle
+@njit
+def calcul_angle(np_bord, np_bord_ext, distance_parcouru):
+    angle_normale = np.atan2(np_bord[distance_parcouru][1]-np_bord_ext[distance_parcouru][1],np_bord[distance_parcouru][0]-np_bord_ext[distance_parcouru][0])
+    plus = (np_bord[distance_parcouru][0]+10*np.cos(angle_normale+np.pi/2)-np_bord[distance_parcouru+10][0])**2 + (np_bord[distance_parcouru][0]+10*np.sin(angle_normale+np.pi/2)-np_bord[distance_parcouru+10][1])**2 
+    moins = (np_bord[distance_parcouru][0]+10*np.cos(angle_normale-np.pi/2)-np_bord[distance_parcouru+10][0])**2 + (np_bord[distance_parcouru][0]+10*np.sin(angle_normale-np.pi/2)-np_bord[distance_parcouru+10][1])**2 
+    if plus > moins :
+        angle_target = np.atan2(np_bord[distance_parcouru][1]-np_bord_ext[distance_parcouru][1],np_bord[distance_parcouru][0]-np_bord_ext[distance_parcouru][0])+np.pi/2
+    else:
+        angle_target = np.atan2(np_bord[distance_parcouru][1]-np_bord_ext[distance_parcouru][1],np_bord[distance_parcouru][0]-np_bord_ext[distance_parcouru][0])-np.pi/2
+    angle_target = np.degrees(angle_target)
     
-    return new_dist, dist_min/100, diff_angle, diff_angle_devant
+    return angle_target
 
 # avancer
 @njit
@@ -77,8 +95,44 @@ def calcul_avancer(pos, pos_old, angle, adherence, vitesse):
     new_pos = (pos[0] + V_new_x, pos[1] + V_new_y)
     
     return new_pos, (V_new_x**2 + V_new_y**2)**0.5
-        
-        
+
+# tour
+@njit
+def tour(quart_tour,pos, Largeur):       
+    if quart_tour%4==3:
+        if pos[1]<425 and pos[0]>2*Largeur/3: # en haut à droite
+            quart_tour += 1
+            
+    if quart_tour%4==0:
+        if pos[1]<425 and pos[0]<2*Largeur/3: # en haut à gauche
+            quart_tour += 1      
+            
+    if quart_tour%4==1:
+        if pos[1]>425 and pos[0]<2*Largeur/3: # en bas à gauche
+            quart_tour += 1 
+                
+    if quart_tour%4==2:
+        if pos[1]>425 and pos[0]>2*Largeur/3: # en bas à droite
+            quart_tour += 1
+            
+            
+    if quart_tour%4==3:
+        if pos[1]>425 and pos[0]<2*Largeur/3: # en bas à gauche
+            quart_tour -= 1
+            
+    if quart_tour%4==0:
+        if pos[1]>425 and pos[0]>2*Largeur/3: # en bas à droite
+            quart_tour -= 1      
+            
+    if quart_tour%4==1:
+        if pos[1]<425 and pos[0]>2*Largeur/3: # en haut à droite
+            quart_tour -= 1 
+                
+    if quart_tour%4==2:
+        if pos[1]<425 and pos[0]<2*Largeur/3: # en haut à gauche
+            quart_tour -= 1
+    return quart_tour
+    
 # =============================================================================
 
 
@@ -113,7 +167,7 @@ class Car :
         self.gamma = 0.99 # long ou court terme
                         
         self.model = nn.Sequential(
-            nn.Linear(in_features=4,out_features=128),
+            nn.Linear(in_features=15,out_features=128),
             nn.ReLU(),
             nn.Linear(in_features=128, out_features=128),
             nn.ReLU(),
@@ -124,6 +178,8 @@ class Car :
         
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.0005)  
         self.loss_criterion = nn.MSELoss()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
                                         
     def reset(self):            
         self.reward_tot = 0
@@ -157,12 +213,14 @@ class Car :
     def distance(self):
         global bord
         global np_bord
+        global np_bord_ext
+        
         new_dist = self.distance_parcouru
 
         i_min = max(0, self.distance_parcouru - 100)
         i_max = min(len(bord), self.distance_parcouru + 200)
         
-        new_dist, self.dist_bord, self.diff_angle, self.diff_angle_devant  = dist(np_bord, new_dist, self.position[0], self.position[1], i_min, i_max, self.angle)
+        new_dist, self.dist_bord, self.diff_angle = dist(np_bord, np_bord_ext, new_dist, self.position.x, self.position.y, i_min, i_max, self.angle)
         
         
         self.reward += (new_dist-self.distance_parcouru)*0.001
@@ -193,56 +251,20 @@ class Car :
             self.pause += 1
             if self.pause > 100 :
                 self.reward -= 1
-                if self.pause > 20_000 :
-                    self.game_over = True
         else : 
             self.pause = 0
         
-    def collision(self, couleur=(12,190,0), x=None, y=None):
+    def collision(self, couleur=(12,190,0), x=None, y=None): 
         if x == None:
             x, y = int(self.position.x), int(self.position.y)
         if not (0 <= x < Largeur and 0 <= y < Hauteur):
             return True    
-        return np.all(np.abs(terrain_array[x, y] - couleur) < 20)
-        
-
-    def tour(self):
-        
-        if self.quart_tour%4==3:
-            if self.position[1]<425 and self.position[0]>2*Largeur/3: # en haut à droite
-                self.quart_tour += 1
-                
-        if self.quart_tour%4==0:
-            if self.position[1]<425 and self.position[0]<2*Largeur/3: # en haut à gauche
-                self.quart_tour += 1      
-                
-        if self.quart_tour%4==1:
-            if self.position[1]>425 and self.position[0]<2*Largeur/3: # en bas à gauche
-                self.quart_tour += 1 
-                    
-        if self.quart_tour%4==2:
-            if self.position[1]>425 and self.position[0]>2*Largeur/3: # en bas à droite
-                self.quart_tour += 1
-                
-                
-        if self.quart_tour%4==3:
-            if self.position[1]>425 and self.position[0]<2*Largeur/3: # en bas à gauche
-                self.quart_tour -= 1
-                
-        if self.quart_tour%4==0:
-            if self.position[1]>425 and self.position[0]>2*Largeur/3: # en bas à droite
-                self.quart_tour -= 1      
-                
-        if self.quart_tour%4==1:
-            if self.position[1]<425 and self.position[0]>2*Largeur/3: # en haut à droite
-                self.quart_tour -= 1 
-                    
-        if self.quart_tour%4==2:
-            if self.position[1]<425 and self.position[0]<2*Largeur/3: # en haut à gauche
-                self.quart_tour -= 1
+        return np.all(np.abs(terrain_array[x, y] - couleur) < 25)
             
     def Jeux(self):
         global map_fini
+        global np_bord_ext
+        global np_bord
         
         if not self.game_over: 
             
@@ -250,10 +272,14 @@ class Car :
 
             vitesse_actuelle = self.position - self.pos_old
                      
-            state = ((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4,
+            state = [(vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4,
                      self.dist_bord,
-                     self.diff_angle,
-                     self.diff_angle_devant)
+                     self.diff_angle]
+            for i in range(0, 120, 40):
+                state += [np_bord[self.distance_parcouru+i][0], 
+                          np_bord[self.distance_parcouru+i][1],
+                          np_bord_ext[self.distance_parcouru+i][0],
+                          np_bord_ext[self.distance_parcouru+i][1]]
                 
 # =============================== récupération de l'action =============================================
             
@@ -310,30 +336,24 @@ class Car :
             
             self.distance()
             
-            if self.collision() or self.pause > 100:
+            if self.collision() :
                 #self.game_over = True
                 self.n_mort += 1
                 self.reward -= 1
+                self.distance_parcouru += 10
                 
-                angle_normale = math.pi/2-math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1], bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])
-                x=int(bord[self.distance_parcouru][0]+math.cos(angle_normale))
-                y=int(bord[self.distance_parcouru][1]+math.sin(angle_normale))
-                if self.collision(x=x,y=y) :
-                    angle_normale = math.pi/2+math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1], bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])
-                    x=bord[self.distance_parcouru][0]+36*math.cos(angle_normale)
-                    y=bord[self.distance_parcouru][1]+36*math.sin(angle_normale)
-                else :
-                    angle_normale = math.pi/2-math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1], bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])
-                    x=bord[self.distance_parcouru][0]+36*math.cos(angle_normale)
-                    y=bord[self.distance_parcouru][1]+36*math.sin(angle_normale)
+                x = (np_bord[self.distance_parcouru][0]+np_bord_ext[self.distance_parcouru][0])/2
+                y = (np_bord[self.distance_parcouru][1]+np_bord_ext[self.distance_parcouru][1])/2  
                 
                 self.position = pygame.Vector2(x, y)
                 self.pos_old = pygame.Vector2(x, y)
-                self.angle = (-math.atan2(bord[self.distance_parcouru+1][1]-bord[self.distance_parcouru][1],bord[self.distance_parcouru+1][0]-bord[self.distance_parcouru][0])*180/math.pi+360)%360
+                pygame.draw.rect(terrain, (255,0,0), (np_bord[self.distance_parcouru][0],np_bord[self.distance_parcouru][1],2,2), 2)
+                pygame.draw.rect(terrain, (255,0,0), (np_bord_ext[self.distance_parcouru][0],np_bord_ext[self.distance_parcouru][1],2,2), 2)
+                self.angle = calcul_angle(np_bord, np_bord_ext, self.distance_parcouru)
                 self.vitesse = 0
 
-            self.tour()
-            
+            self.quart_tour = tour(self.quart_tour,(self.position.x, self.position.y), Largeur)
+
             if self.quart_tour>11:
                 self.tps = str(round(time.time()-self.tps_debut,1))
                 self.game_over = True
@@ -342,11 +362,15 @@ class Car :
 # =============================== mise à jour du model ============================================
 
             vitesse_actuelle = self.position - self.pos_old
-                            
-            state_new = ((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4,
+                     
+            state_new = [(vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4,
                      self.dist_bord,
-                     self.diff_angle,
-                     self.diff_angle_devant)
+                     self.diff_angle]
+            for i in range(0, 120, 40):
+                state_new += [np_bord[self.distance_parcouru+i][0], 
+                          np_bord[self.distance_parcouru+i][1],
+                          np_bord_ext[self.distance_parcouru+i][0],
+                          np_bord_ext[self.distance_parcouru+i][1]]
 
             self.replay_buffer.append((state, action, self.reward, state_new))
             if len(self.replay_buffer) > self.replay_buffer_size :
@@ -354,15 +378,19 @@ class Car :
                 
             if self.n_frame % 4 == 0 and len(self.replay_buffer) > self.batch_size :
                 batch = random.sample(self.replay_buffer, self.batch_size)
-                L_new_state = torch.tensor([e[3] for e in batch], dtype=torch.float32)
-                with torch.no_grad():
-                    esperances_new_state = self.model(L_new_state)
-                target = torch.tensor([self.gamma*torch.max(esperances_new_state[i]) + batch[i][2] for i in range(self.batch_size)], dtype=torch.float32)
                 
-                L_state = torch.tensor([e[0] for e in batch], dtype=torch.float32)
-                esperances = self.model(L_state)
-                L_actions = torch.tensor([e[1] for e in batch], dtype=torch.long).unsqueeze(1)
-                pred = esperances.gather(1, L_actions).squeeze(1) 
+                states = torch.tensor([e[0] for e in batch], dtype=torch.float32).to(self.device)
+                actions = torch.tensor([e[1] for e in batch], dtype=torch.long).unsqueeze(1).to(self.device)
+                rewards = torch.tensor([e[2] for e in batch], dtype=torch.float32).to(self.device)
+                next_states = torch.tensor([e[3] for e in batch], dtype=torch.float32).to(self.device)
+                
+                with torch.no_grad():
+                    esperances_new_state = self.model(next_states)
+                    max_esperances, max_actions = esperances_new_state.max(dim=1)
+                    target = rewards + self.gamma * max_esperances 
+                    
+                esperances = self.model(states)
+                pred = esperances.gather(1, actions).squeeze(1) 
                 
                 loss = self.loss_criterion(pred, target)
                 self.optimizer.zero_grad()
@@ -373,19 +401,8 @@ class Car :
             self.n_frame += 1
 
 def isbord(x, y, couleur=(95,207,43)):   
-    if not (0 <= x < Largeur and 0 <= y < Hauteur): # hors de l'écran
-        return True
-
-    pixel = terrain.get_at((x, y)) # donne la couleur du pixel
+    return np.all(np.abs(terrain_array[x, y] - couleur) < 50)
     
-    count = 0
-    for c in range(3):
-        if couleur[c]-30<pixel[c]<couleur[c]+30:
-            count+=1
-    if count == 3:
-        return True
-    return False
-
 def point_new(point_old):
     test = ((-1,-1),(-1,0),(-1,1),(0,1),(1,1),(1,0),(1,-1),(0,-1))    
 
@@ -395,7 +412,7 @@ def point_new(point_old):
     while isbord(point_old[0]+test[compteur][0], point_old[1]+test[compteur][1]) :
         compteur = (compteur+1)%8
     return (point_old[0]+test[compteur][0], point_old[1]+test[compteur][1])
-        
+
 def centre_piste():
     bord = []
 
@@ -404,42 +421,51 @@ def centre_piste():
     while point not in bord :
         bord.append(point)
         point = point_new(point)
-        
-    return tuple(bord[-100:]+bord+bord+bord+bord[:200]) # il faut une marge | bord[-100:] la voiture commence avant la ligne d'arrivée
+        #pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
+    bord_ext0 = []
+    point = (884,412)
+    while point not in bord_ext0 :
+        bord_ext0.append(point)
+        point = point_new(point)
+        #pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
+    
+    ind = len(bord_ext0)-1
+    bord_ext = []
+    for p in bord : 
+        mini = bord_ext0[ind-1]
+        if (mini[0]-p[0])**2+(mini[1]-p[1])**2 < (bord_ext0[ind][0]-p[0])**2+(bord_ext0[ind][1]-p[1])**2 :
+            ind -= 1
+        ind -= 1
+        bord_ext.append(bord_ext0[ind+1])
+    bord2 = tuple(bord[-100:]+bord+bord+bord+bord[:200]) # il faut une marge | bord[-100:] la voiture commence avant la ligne d'arrivée
+    bord_ext2 = tuple(bord_ext[-100:]+bord_ext+bord_ext+bord_ext+bord_ext[:200]) 
+    print(len(bord2),len(bord_ext2))
+    return bord2, bord_ext2
 
-bord = centre_piste()
+bord, bord_ext = centre_piste()
 np_bord = np.array(bord)
+np_bord_ext = np.array(bord_ext)
 
-# def save(Q_table, filename="save.json"):
-#     try:
-#         with open(filename, "w") as f:
-#             json.dump({"Q_table": list(Q_table.items())}, f)
-#     except Exception as e:
-#         print("❌ Erreur lors de la sauvegarde :", e)
+def save(car, filename="save.pth"):
+    torch.save(car.model.state_dict(), filename)
         
-# def load(filename="save.json"):
-#     try:
-#         with open(filename, "r") as f:
-#             data = json.load(f)
-#         Q_table = {tuple(k): v for k, v in data["Q_table"]}
-#         print(f"✅ Q-table chargée depuis {filename}")
-#         return Q_table
-#     except Exception as e:
-#         print("❌ Erreur lors du chargement de la Q-table :", e)
-#         return {}
+def load(car, filename="save.pth"):
+    try:
+        car.model.load_state_dict(torch.load(filename, map_location=car.device))
+        car.model.to(car.device)
+        print(f"✅ model chargée depuis {filename}")
+    except Exception as e:
+        print("❌ Erreur lors du chargement du model :", e)
+        return None
     
     
-affichage = False #TODO
+affichage = True #TODO
 map_fini = False
 
 car = Car()
 
-# sauvegarde = load(filename="save1.json")
-
-# if sauvegarde != None :
-#     car=Car(Q_table=sauvegarde)
+sauvegarde = load(car, filename="save.pth")
     
-
 
 scores_moy_plot = []
 scores_plot = []
@@ -461,7 +487,7 @@ def train():
     car.reset()
     if car.n_games%10==0:
         affichage = True
-        # save(car.Q_table, filename="save.json")
+        save(car, filename="save.pth")
         
     while not car.game_over :
         for event in pygame.event.get():

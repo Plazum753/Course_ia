@@ -445,7 +445,7 @@ def load(filename="save.json"):
         return {}
     
     
-affichage = False #TODO
+affichage = True #TODO
 map_fini = False
 
 car = Car()
