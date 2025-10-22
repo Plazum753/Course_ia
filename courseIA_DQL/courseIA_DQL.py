@@ -272,18 +272,18 @@ class Car :
 
             vitesse_actuelle = self.position - self.pos_old
                      
-            state = [(vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4,
-                     self.dist_bord,
-                     self.diff_angle]
+            state = [float((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4),
+                     float(self.dist_bord),
+                     float(self.diff_angle)]
             for i in range(0, 120, 40):
-                state += [np_bord[self.distance_parcouru+i][0], 
-                          np_bord[self.distance_parcouru+i][1],
-                          np_bord_ext[self.distance_parcouru+i][0],
-                          np_bord_ext[self.distance_parcouru+i][1]]
+                state += [float(np_bord[self.distance_parcouru+i][0]/Largeur), 
+                          float(np_bord[self.distance_parcouru+i][1]/Hauteur),
+                          float(np_bord_ext[self.distance_parcouru+i][0]/Largeur),
+                          float(np_bord_ext[self.distance_parcouru+i][1]/Hauteur)]
                 
 # =============================== récupération de l'action =============================================
             
-            epsilon = max(2,100-self.n_games)#TODO
+            epsilon = max(2,100-self.n_games)
             
             if random.randint(0,100) > epsilon :
                 with torch.no_grad():
@@ -341,13 +341,15 @@ class Car :
                 self.n_mort += 1
                 self.reward -= 1
                 
+                self.distance_parcouru += 100
+                
                 x = (np_bord[self.distance_parcouru][0]+np_bord_ext[self.distance_parcouru][0])/2
                 y = (np_bord[self.distance_parcouru][1]+np_bord_ext[self.distance_parcouru][1])/2  
                 
                 self.position = pygame.Vector2(x, y)
                 self.pos_old = pygame.Vector2(x, y)
-                pygame.draw.rect(terrain, (255,0,0), (np_bord[self.distance_parcouru][0],np_bord[self.distance_parcouru][1],2,2), 2)
-                pygame.draw.rect(terrain, (255,0,0), (np_bord_ext[self.distance_parcouru][0],np_bord_ext[self.distance_parcouru][1],2,2), 2)
+                #pygame.draw.rect(terrain, (255,0,0), (np_bord[self.distance_parcouru][0],np_bord[self.distance_parcouru][1],2,2), 2)
+                #pygame.draw.rect(terrain, (255,0,0), (np_bord_ext[self.distance_parcouru][0],np_bord_ext[self.distance_parcouru][1],2,2), 2)
                 self.angle = calcul_angle(np_bord, np_bord_ext, self.distance_parcouru)
 
                 self.vitesse = 0
@@ -363,14 +365,15 @@ class Car :
 
             vitesse_actuelle = self.position - self.pos_old
                      
-            state_new = [(vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4,
-                     self.dist_bord,
-                     self.diff_angle]
+            state_new = [float((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4),
+                     float(self.dist_bord),
+                     float(self.diff_angle)]
             for i in range(0, 120, 40):
-                state_new += [np_bord[self.distance_parcouru+i][0], 
-                          np_bord[self.distance_parcouru+i][1],
-                          np_bord_ext[self.distance_parcouru+i][0],
-                          np_bord_ext[self.distance_parcouru+i][1]]
+                state_new += [float(np_bord[self.distance_parcouru+i][0]/Largeur), 
+                              float(np_bord[self.distance_parcouru+i][1]/Hauteur),
+                              float(np_bord_ext[self.distance_parcouru+i][0]/Largeur),
+                              float(np_bord_ext[self.distance_parcouru+i][1]/Hauteur)]
+
 
             self.replay_buffer.append((state, action, self.reward, state_new))
             if len(self.replay_buffer) > self.replay_buffer_size :
