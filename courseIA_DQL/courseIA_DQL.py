@@ -12,6 +12,13 @@ import torch.nn as nn
 from numba import njit
 import numpy as np
 
+# =============================================================================
+# import cProfile, pstats
+# 
+# profiler = cProfile.Profile()
+# profiler.enable()
+# =============================================================================
+
 pygame.init()
 
 vert=(0,180,0)
@@ -40,47 +47,23 @@ def affiche(text, position, color = noir, taille = 20):
         zoneTexte = texte.get_rect()
         zoneTexte.center = position
         Zone_jeu.blit(texte,zoneTexte)
-        #pygame.display.update() #Mise à jour de la fenêtre
 
 # ============================= foction du programme ================================================
 
 # distance
 @njit
-def dist(np_bord, np_bord_ext, new_dist, pos_x, pos_y, i_min, i_max, angle):
+def dist(np_bord, np_bord_ext, new_dist, pos_x, pos_y, i_min, i_max, angle, angles):
     dist_min = ((np_bord[new_dist][0]-pos_x)**2 + (np_bord[new_dist][1]-pos_y)**2)**0.5
     for i in range(i_min, i_max):
         if ((np_bord[i][0]-pos_x)**2 + (np_bord[i][1]-pos_y)**2)**0.5 < dist_min:
             dist_min = ((np_bord[i][0]-pos_x)**2 + (np_bord[i][1]-pos_y)**2)**0.5
             new_dist = i
 
-    angle_normale = np.atan2(np_bord[new_dist][1]-np_bord_ext[new_dist][1],np_bord[new_dist][0]-np_bord_ext[new_dist][0])
-    plus = (np_bord[new_dist][0]+10*np.cos(angle_normale+np.pi/2)-np_bord[new_dist+10][0])**2 + (np_bord[new_dist][1]+10*np.sin(angle_normale+np.pi/2)-np_bord[new_dist+10][1])**2 
-    moins = (np_bord[new_dist][0]+10*np.cos(angle_normale-np.pi/2)-np_bord[new_dist+10][0])**2 + (np_bord[new_dist][1]+10*np.sin(angle_normale-np.pi/2)-np_bord[new_dist+10][1])**2 
-    if plus > moins :
-        angle_target = np.atan2(np_bord[new_dist][1]-np_bord_ext[new_dist][1],np_bord[new_dist][0]-np_bord_ext[new_dist][0])+np.pi/2
-    else:
-        angle_target = np.atan2(np_bord[new_dist][1]-np_bord_ext[new_dist][1],np_bord[new_dist][0]-np_bord_ext[new_dist][0])-np.pi/2
-    angle_target = np.degrees(angle_target)
-
-    diff_angle = angle_target - angle
+    diff_angle = angles[new_dist] - angle
     diff_angle = (diff_angle+540)%360-180 # intervalle [-180, 180[
     diff_angle = (diff_angle+180)/360 # normalisation  
 
     return new_dist, dist_min/100, diff_angle
-
-# angle
-@njit
-def calcul_angle(np_bord, np_bord_ext, distance_parcouru):
-    angle_normale = np.atan2(np_bord[distance_parcouru][1]-np_bord_ext[distance_parcouru][1],np_bord[distance_parcouru][0]-np_bord_ext[distance_parcouru][0])
-    plus = (np_bord[distance_parcouru][0]+10*np.cos(angle_normale+np.pi/2)-np_bord[distance_parcouru+10][0])**2 + (np_bord[distance_parcouru][1]+10*np.sin(angle_normale+np.pi/2)-np_bord[distance_parcouru+10][1])**2 
-    moins = (np_bord[distance_parcouru][0]+10*np.cos(angle_normale-np.pi/2)-np_bord[distance_parcouru+10][0])**2 + (np_bord[distance_parcouru][1]+10*np.sin(angle_normale-np.pi/2)-np_bord[distance_parcouru+10][1])**2 
-    if plus < moins :
-        angle_target = np.atan2(np_bord[distance_parcouru][1]-np_bord_ext[distance_parcouru][1],np_bord[distance_parcouru][0]-np_bord_ext[distance_parcouru][0])+np.pi/2
-    else:
-        angle_target = np.atan2(np_bord[distance_parcouru][1]-np_bord_ext[distance_parcouru][1],np_bord[distance_parcouru][0]-np_bord_ext[distance_parcouru][0])-np.pi/2
-    angle_target = np.degrees(-angle_target)
-    
-    return angle_target
 
 # avancer
 @njit
@@ -180,6 +163,7 @@ class Car :
         self.loss_criterion = nn.MSELoss()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
+        torch.compile(self.model)
                                         
     def reset(self):            
         self.reward_tot = 0
@@ -214,13 +198,14 @@ class Car :
         global bord
         global np_bord
         global np_bord_ext
+        global angles
         
         new_dist = self.distance_parcouru
 
-        i_min = max(0, self.distance_parcouru - 100)
-        i_max = min(len(bord), self.distance_parcouru + 200)
+        i_min = max(0, self.distance_parcouru - 10)
+        i_max = min(len(bord), self.distance_parcouru + 10)
         
-        new_dist, self.dist_bord, self.diff_angle = dist(np_bord, np_bord_ext, new_dist, self.position.x, self.position.y, i_min, i_max, self.angle)
+        new_dist, self.dist_bord, self.diff_angle = dist(np_bord, np_bord_ext, new_dist, self.position.x, self.position.y, i_min, i_max, self.angle, angles)
         
         
         self.reward += (new_dist-self.distance_parcouru)*0.001
@@ -263,8 +248,9 @@ class Car :
             
     def Jeux(self):
         global map_fini
-        global np_bord_ext
-        global np_bord
+        global  np_bord 
+        global np_bord_ext 
+        global angles
         
         if not self.game_over: 
             
@@ -283,10 +269,10 @@ class Car :
                 
 # =============================== récupération de l'action =============================================
             
-            epsilon = max(2,100-self.n_games)
+            epsilon = max(1,100-self.n_games)
             
             if random.randint(0,100) > epsilon :
-                with torch.no_grad():
+                with torch.inference_mode():
                     action = torch.argmax(self.model(torch.tensor(state))).item()
             else :
                 action = random.randint(0,5) 
@@ -341,16 +327,17 @@ class Car :
                 self.n_mort += 1
                 self.reward -= 1
                 
-                self.distance_parcouru += 100
+                self.distance_parcouru += 50
                 
                 x = (np_bord[self.distance_parcouru][0]+np_bord_ext[self.distance_parcouru][0])/2
                 y = (np_bord[self.distance_parcouru][1]+np_bord_ext[self.distance_parcouru][1])/2  
                 
                 self.position = pygame.Vector2(x, y)
                 self.pos_old = pygame.Vector2(x, y)
-                #pygame.draw.rect(terrain, (255,0,0), (np_bord[self.distance_parcouru][0],np_bord[self.distance_parcouru][1],2,2), 2)
-                #pygame.draw.rect(terrain, (255,0,0), (np_bord_ext[self.distance_parcouru][0],np_bord_ext[self.distance_parcouru][1],2,2), 2)
-                self.angle = calcul_angle(np_bord, np_bord_ext, self.distance_parcouru)
+
+                # pygame.draw.rect(terrain, (255,0,0), (np_bord[self.distance_parcouru][0],np_bord[self.distance_parcouru][1],2,2), 2)
+                # pygame.draw.rect(terrain, (255,0,0), (np_bord_ext[self.distance_parcouru][0],np_bord_ext[self.distance_parcouru][1],2,2), 2)
+                self.angle = angles[self.distance_parcouru]
 
                 self.vitesse = 0
 
@@ -382,15 +369,16 @@ class Car :
             if self.n_frame % 4 == 0 and len(self.replay_buffer) > self.batch_size :
                 batch = random.sample(self.replay_buffer, self.batch_size)
                 
-                states = torch.tensor([e[0] for e in batch], dtype=torch.float32).to(self.device)
-                actions = torch.tensor([e[1] for e in batch], dtype=torch.long).unsqueeze(1).to(self.device)
-                rewards = torch.tensor([e[2] for e in batch], dtype=torch.float32).to(self.device)
-                next_states = torch.tensor([e[3] for e in batch], dtype=torch.float32).to(self.device)
+                states = torch.tensor([e[0] for e in batch], device=self.device, dtype=torch.float32)
+                actions = torch.tensor([e[1] for e in batch], device=self.device, dtype=torch.long).unsqueeze(1)
+                rewards = torch.tensor([e[2] for e in batch], device=self.device, dtype=torch.float32)
+                next_states = torch.tensor([e[3] for e in batch], device=self.device, dtype=torch.float32)
                 
-                with torch.no_grad():
+                with torch.inference_mode():
                     esperances_new_state = self.model(next_states)
                     max_esperances, max_actions = esperances_new_state.max(dim=1)
                     target = rewards + self.gamma * max_esperances 
+                target = target.clone().detach()
                     
                 esperances = self.model(states)
                 pred = esperances.gather(1, actions).squeeze(1) 
@@ -416,13 +404,36 @@ def point_new(point_old):
         compteur = (compteur+1)%8
     return (point_old[0]+test[compteur][0], point_old[1]+test[compteur][1])
 
+@njit
+def meme_taille(A,B):
+    compteur = 0
+    C = []
+    if len(A) > len(B):
+        frequence = len(A)/(len(A)-len(B))
+        for i in range(len(A)):
+            if i > compteur :
+                compteur += frequence
+            else :
+                C.append(A[i])
+        return C,B
+    elif len(A) < len(B):
+        frequence = len(B)/(len(B)-len(A))
+        for i in range(len(B)):
+            if i > compteur :
+                compteur += frequence
+            else :
+                C.append(B[i])
+        return A,C
+    return A,B
+    
+
 def centre_piste():
-    bord = []
+    bord0 = []
 
     point = (812,412) #­ premier point de collision à gauche de la ligne d'arrivée
 
-    while point not in bord :
-        bord.append(point)
+    while point not in bord0 :
+        bord0.append(point)
         point = point_new(point)
         #pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
     bord_ext0 = []
@@ -431,33 +442,64 @@ def centre_piste():
         bord_ext0.append(point)
         point = point_new(point)
         #pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
+    bord_ext0.reverse()    
     
+    indices = ((0,0),(100,100),(170,310),(300,460),(740,850),(800,1100),(850,1250),(1100,1525),(1250,1610),(1415,1660),(1550,1810),(1605,2000),(1700,2125),(2070,2500),(2190,2700),(2250,2860),(2340,2915),(-1,-1))
+    
+    # for i in indices :
+    #     pygame.draw.rect(terrain, (255,0,0), (bord0[i[0]][0],bord0[i[0]][1],4,4), 2)
+    #     pygame.draw.rect(terrain, (255,0,0), (bord_ext0[i[1]][0],bord_ext0[i[1]][1],4,4), 2)
+    
+    bord = []   
     bord_ext = []
-    frequence = len(bord_ext0)/(len(bord_ext0)-len(bord))
-    compteur = 0
-    for i in range(len(bord_ext0)):
-        if i > compteur :
-            compteur += frequence
-        else :
-            bord_ext.append(bord_ext0[i])
-            #pygame.draw.rect(terrain, (255,0,0), (bord_ext0[i][0],bord_ext0[i][1],2,2), 2)
-    bord_ext.reverse()
+    for i in range(len(indices)-1):
+        b,b_ext = meme_taille(bord0[indices[i][0]:indices[i+1][0]], bord_ext0[indices[i][1]:indices[i+1][1]])
+        bord += b
+        bord_ext += b_ext
+       
+    # for point in bord:
+    #     pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
+    # for point in bord_ext:
+    #     pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
     
-    bord2 = tuple(bord[-100:]+bord+bord+bord+bord[:200]) # il faut une marge | bord[-100:] la voiture commence avant la ligne d'arrivée
-    bord_ext2 = tuple(bord_ext[-100:]+bord_ext+bord_ext+bord_ext+bord_ext[:200]) 
-    return bord2, bord_ext2
+    bord = tuple(bord[-100:]+bord+bord+bord+bord[:200]) # il faut une marge | bord[-100:] la voiture commence avant la ligne d'arrivée
+    bord_ext = tuple(bord_ext[-100:]+bord_ext+bord_ext+bord_ext+bord_ext[:200]) 
+    return bord, bord_ext
 
 bord, bord_ext = centre_piste()
 np_bord = np.array(bord)
 np_bord_ext = np.array(bord_ext)
 
+@njit
+def liste_angles(np_bord, np_bord_ext):
+    angles = []
+    for i in range(len(np_bord)) : 
+        normale = np_bord[i]-np_bord_ext[i]
+        tangente = np_bord[i]-np_bord[i+1]
+        cross = tangente[0]*normale[1]-tangente[1]*normale[0]
+        if cross > 0 :
+            angle_target = np.atan2(np_bord[i][1]-np_bord_ext[i][1],np_bord[i][0]-np_bord_ext[i][0])+np.pi/2
+        else:
+            angle_target = np.atan2(np_bord[i][1]-np_bord_ext[i][1],np_bord[i][0]-np_bord_ext[i][0])-np.pi/2
+        angle_target = np.degrees(-angle_target)
+        angles.append(angle_target)
+    return np.array(angles)
+
+angles = liste_angles(np_bord, np_bord_ext)
+
 def save(car, filename="save.pth"):
-    torch.save(car.model.state_dict(), filename)
+    torch.save({
+    'model': car.model.state_dict(),
+    'optimizer': car.optimizer.state_dict(),
+    'n_game': car.n_games}, filename)
         
 def load(car, filename="save.pth"):
     try:
-        car.model.load_state_dict(torch.load(filename, map_location=car.device))
+        sauvegarde = torch.load(filename)
+        car.model.load_state_dict(sauvegarde["model"])
         car.model.to(car.device)
+        car.optimizer.load_state_dict(sauvegarde["optimizer"])
+        car.n_games = sauvegarde["n_game"]
         print(f"✅ model chargée depuis {filename}")
     except Exception as e:
         print("❌ Erreur lors du chargement du model :", e)
@@ -488,38 +530,39 @@ def train():
     
     print("Game n°"+str(len(scores_plot)+1))
 
-    clock = pygame.time.Clock()
+    #clock = pygame.time.Clock()
     car.reset()
-    if car.n_games%10==0:
+    if car.n_games%20==0:
         affichage = True
         save(car, filename="save.pth")
-        
+    
     while not car.game_over :
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT : # lorsqu'on clique sur la croix rouge
-                pygame.quit()
-                exit()
-                
-        Zone_jeu.blit(terrain,(0, 0)) 
+        if car.n_frame % 100 == 0:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT : # lorsqu'on clique sur la croix rouge
+                    pygame.quit()
+                    exit()
+                    
+        if affichage == True :
+            Zone_jeu.blit(terrain,(0, 0)) 
         car.Jeux()
         
         if affichage == True :
                 
             Zone_jeu.blit(car.img,car.rect.topleft) #on place la meilleur voiture au dessus des autres
-                    
-            if car.quart_tour<0:
-                affiche("Tour : 0/3",(Largeur-60,25))
-            elif car.quart_tour > 11:
-                affiche("Tour : 3/3",(Largeur-60,25))
-            else:
-                affiche("Tour :"+str(car.quart_tour//4+1)+"/3",(Largeur-60,25))
-            if car.tps_debut == -1 :
-                affiche("Chrono : 0s",(Largeur-75,50))
-            else :
-                affiche("Chrono :"+str(round(car.n_frame/100,1))+"s",(Largeur-75,50))
+            # if car.quart_tour<0:
+            #     affiche("Tour : 0/3",(Largeur-60,25))
+            # elif car.quart_tour > 11:
+            #     affiche("Tour : 3/3",(Largeur-60,25))
+            # else:
+            #     affiche("Tour :"+str(car.quart_tour//4+1)+"/3",(Largeur-60,25))
+            # if car.tps_debut == -1 :
+            #     affiche("Chrono : 0s",(Largeur-75,50))
+            # else :
+            #     affiche("Chrono :"+str(round(car.n_frame/100,1))+"s",(Largeur-75,50))
             
             pygame.display.update() #on rafraichit l'écran.
-            clock.tick(0)
+            #clock.tick(0)
         
     scores_plot.append(round(car.n_frame/100,2))
     print("temps : "+str(round(car.n_frame/100,2)))
@@ -541,42 +584,12 @@ def train():
     if ancien_affichage != affichage:
         affichage = ancien_affichage
         
-def test():
-    global affichage
-    ancien_affichage = affichage
-    affichage = True
-    clock = pygame.time.Clock()
-
-    car.reset()
-    while car.game_over == False:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT : # lorsqu'on clique sur la croix rouge
-                pygame.quit()
-                exit()
-        
-        Zone_jeu.blit(terrain,(0, 0)) 
-        car.Jeux()
-        Zone_jeu.blit(car.img,car.rect.topleft)
-        if car.quart_tour<0:
-            affiche("Tour : 0/3",(Largeur-60,25))
-        else:
-            affiche("Tour :"+str(car.quart_tour//4)+"/3",(Largeur-60,25))
-        if car.tps_debut == -1 :
-            affiche("Chrono : 0s",(Largeur-75,50))
-        else :
-            affiche("Chrono :"+str(round(car.n_frame/100,1))+"s",(Largeur-75,50))
-        pygame.display.update()
-        clock.tick(SPEED)
-        
-    if car.quart_tour>11:
-        print("temps : "+str(round(car.n_frame/100,2)))
-    else :
-        print("distance : "+str(round(car.distance_parcouru,2)))
-        
-    affichage = ancien_affichage
+# =============================================================================
+#     profiler.disable()
+#     stats = pstats.Stats(profiler).sort_stats('cumtime')
+#     stats.print_stats(16)  # Affiche les 50 fonctions les plus lentes
+# =============================================================================
     
-#test()
-
 while True:
     train()
 
