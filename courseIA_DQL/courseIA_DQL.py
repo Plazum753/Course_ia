@@ -159,7 +159,7 @@ class Car :
             nn.Linear(in_features=64, out_features=6)
             )
         
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0005)  
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)  
         self.loss_criterion = nn.MSELoss()
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
@@ -327,8 +327,9 @@ class Car :
                 self.n_mort += 1
                 self.reward -= 1
                 
-                self.distance_parcouru += 50
-                
+                self.distance_parcouru -= 50
+                self.distance_parcouru = max(0, self.distance_parcouru)
+                                
                 x = (np_bord[self.distance_parcouru][0]+np_bord_ext[self.distance_parcouru][0])/2
                 y = (np_bord[self.distance_parcouru][1]+np_bord_ext[self.distance_parcouru][1])/2  
                 
@@ -499,6 +500,7 @@ def load(car, filename="save.pth"):
         car.model.load_state_dict(sauvegarde["model"])
         car.model.to(car.device)
         car.optimizer.load_state_dict(sauvegarde["optimizer"])
+        # car.optimizer = optim.Adam(car.model.parameters(), lr=0.0001) # pour changer le learning rate
         car.n_games = sauvegarde["n_game"]
         print(f"✅ model chargée depuis {filename}")
     except Exception as e:
@@ -528,10 +530,11 @@ def train():
     
     ancien_affichage = affichage
     
-    print("Game n°"+str(len(scores_plot)+1))
 
     #clock = pygame.time.Clock()
     car.reset()
+    print("Game n°"+str(car.n_games))
+
     if car.n_games%20==0:
         affichage = True
         save(car, filename="save.pth")

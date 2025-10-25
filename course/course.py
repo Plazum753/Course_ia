@@ -176,7 +176,7 @@ class Car :
             bouton = [0,0,0]
             keys = pygame.key.get_pressed()
             avance = keys[pygame.K_UP]
-            #recule = keys[pygame.K_DOWN]
+            recule = keys[pygame.K_DOWN]
             droite = keys[pygame.K_RIGHT]
             gauche = keys[pygame.K_LEFT]
                 
@@ -194,22 +194,22 @@ class Car :
                 self.vitesse += self.acceleration
                 bouton[0] = 1
                 
-            else : # TODO à enlever plus tard
-                self.vitesse -= self.frein
-            game_play.append(bouton.copy())
+            # else : # TODO à enlever plus tard
+            #     self.vitesse -= self.frein
+            # game_play.append(bouton.copy())
 
-            # if recule:
-            #     self.vitesse -= self.frein #TODO à remettre plus tard
-            # if not recule and not avance:
-            #     # Inertie : ralentit progressivement
-            #     if self.vitesse > 0:
-            #         self.vitesse -= self.frottement
-            #         if self.vitesse < 0:
-            #             self.vitesse = 0
-            #     elif self.vitesse < 0:
-            #         self.vitesse += self.frottement
-            #         if self.vitesse > 0:
-            #             self.vitesse = 0
+            if recule:
+                self.vitesse -= self.frein #TODO à remettre plus tard
+            if not recule and not avance:
+                # Inertie : ralentit progressivement
+                if self.vitesse > 0:
+                    self.vitesse -= self.frottement
+                    if self.vitesse < 0:
+                        self.vitesse = 0
+                elif self.vitesse < 0:
+                    self.vitesse += self.frottement
+                    if self.vitesse > 0:
+                        self.vitesse = 0
             
             # Limitation de la vitesse maximale
             if self.vitesse > self.max_vitesse:
@@ -233,14 +233,14 @@ class Car :
                 affiche("Game Over",(Largeur/2,((Hauteur)/2-50)),taille = 100)
                 return gameOver()
             self.tour()
-            if self.quart_tour<0:
-                affiche("Tour : 0/3",(Largeur-60,25))
-            else:
-                affiche("Tour :"+str(self.quart_tour//4)+"/3",(Largeur-60,25))
-            if self.tps_debut == -1 :
-                affiche("Chrono : 0s",(Largeur-75,50))
-            else :
-                affiche("Chrono :"+str(round(time.time()-self.tps_debut,1))+"s",(Largeur-75,50))
+            # if self.quart_tour<0:
+            #     affiche("Tour : 0/3",(Largeur-60,25))
+            # else:
+            #     affiche("Tour :"+str(self.quart_tour//4)+"/3",(Largeur-60,25))
+            # if self.tps_debut == -1 :
+            #     affiche("Chrono : 0s",(Largeur-75,50))
+            # else :
+            #     affiche("Chrono :"+str(round(time.time()-self.tps_debut,1))+"s",(Largeur-75,50))
             
             if self.quart_tour>11:
                 tps = str(round(time.time()-self.tps_debut,1))
