@@ -4,7 +4,8 @@ Machine Learning sur un jeu de course.
 ## Répertoires du projet
 
 * course : projet sans IA, course de voiture
-* course_AG : Algorithme génétique
-* course_QL : Double Q-Learning
+* courseIA_AG : Algorithme génétique
+* courseIA_QL : Double Q-Learning (ne fonctionne pas)
+* courseIA_DQL : Deep-Q-learning
 
 
