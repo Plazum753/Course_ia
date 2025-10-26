@@ -12,12 +12,10 @@ import torch.nn as nn
 from numba import njit
 import numpy as np
 
-# =============================================================================
-# import cProfile, pstats
-# 
-# profiler = cProfile.Profile()
-# profiler.enable()
-# =============================================================================
+import cProfile, pstats
+
+profiler = cProfile.Profile()
+profiler.enable()
 
 pygame.init()
 
@@ -142,29 +140,32 @@ class Car :
         
         self.n_games = 0
         
-        self.batch_size = 64
-        
-        self.replay_buffer = []
-        self.replay_buffer_size = 50_000
-        
         self.gamma = 0.99 # long ou court terme
                         
         self.model = nn.Sequential(
-            nn.Linear(in_features=15,out_features=128),
+            nn.Linear(in_features=15,out_features=64),
             nn.ReLU(),
-            nn.Linear(in_features=128, out_features=128),
-            nn.ReLU(),
-            nn.Linear(in_features=128, out_features=64),
+            nn.Linear(in_features=64, out_features=64),
             nn.ReLU(),
             nn.Linear(in_features=64, out_features=6)
             )
         
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0001)  
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0050)  
         self.loss_criterion = nn.MSELoss()
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cpu")      #"cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
-        torch.compile(self.model)
-                                        
+        
+        self.batch_size = 256
+        
+        self.buffer_max = 50_000
+        self.buffer_size = 0
+        self.buffer_index = 0
+        
+        self.buffer_state = np.zeros((self.buffer_max, 15))
+        self.buffer_action = np.zeros((self.buffer_max,))
+        self.buffer_reward = np.zeros((self.buffer_max,))
+        self.buffer_state_new = np.zeros((self.buffer_max, 15))
+        
     def reset(self):            
         self.reward_tot = 0
         self.img = self.img_origine 
@@ -200,12 +201,10 @@ class Car :
         global np_bord_ext
         global angles
         
-        new_dist = self.distance_parcouru
-
         i_min = max(0, self.distance_parcouru - 10)
         i_max = min(len(bord), self.distance_parcouru + 10)
         
-        new_dist, self.dist_bord, self.diff_angle = dist(np_bord, np_bord_ext, new_dist, self.position.x, self.position.y, i_min, i_max, self.angle, angles)
+        new_dist, self.dist_bord, self.diff_angle = dist(np_bord, np_bord_ext, int(self.distance_parcouru), np.float32(self.position.x), np.float32(self.position.y), int(i_min), int(i_max), int(self.angle), angles)
         
         
         self.reward += (new_dist-self.distance_parcouru)*0.001
@@ -226,7 +225,7 @@ class Car :
             self.rect = self.img.get_rect(center=self.position)
         
     def avancer(self):
-        new_position, V = calcul_avancer((self.position.x,self.position.y), (self.pos_old.x,self.pos_old.y), self.angle, self.adherence, self.vitesse)
+        new_position, V = calcul_avancer((np.float32(self.position.x),np.float32(self.position.y)), (np.float32(self.pos_old.x),np.float32(self.pos_old.y)), int(self.angle), np.float32(self.adherence), np.float32(self.vitesse))
         self.pos_old = self.position
         self.position = pygame.Vector2(new_position[0],new_position[1])
         if affichage == True:
@@ -327,7 +326,7 @@ class Car :
                 self.n_mort += 1
                 self.reward -= 1
                 
-                self.distance_parcouru -= 50
+                #self.distance_parcouru -= 50
                 self.distance_parcouru = max(0, self.distance_parcouru)
                                 
                 x = (np_bord[self.distance_parcouru][0]+np_bord_ext[self.distance_parcouru][0])/2
@@ -342,7 +341,7 @@ class Car :
 
                 self.vitesse = 0
 
-            self.quart_tour = tour(self.quart_tour,(self.position.x, self.position.y), Largeur)
+            self.quart_tour = tour(int(self.quart_tour),(np.float32(self.position.x), np.float32(self.position.y)), Largeur)
 
             if self.quart_tour>11:
                 self.tps = str(round(time.time()-self.tps_debut,1))
@@ -361,19 +360,22 @@ class Car :
                               float(np_bord[self.distance_parcouru+i][1]/Hauteur),
                               float(np_bord_ext[self.distance_parcouru+i][0]/Largeur),
                               float(np_bord_ext[self.distance_parcouru+i][1]/Hauteur)]
-
-
-            self.replay_buffer.append((state, action, self.reward, state_new))
-            if len(self.replay_buffer) > self.replay_buffer_size :
-                self.replay_buffer.pop(0)
+            
+            self.buffer_state[self.buffer_index] = state
+            self.buffer_action[self.buffer_index] = action
+            self.buffer_reward[self.buffer_index] = self.reward
+            self.buffer_state_new[self.buffer_index] = state_new
                 
-            if self.n_frame % 4 == 0 and len(self.replay_buffer) > self.batch_size :
-                batch = random.sample(self.replay_buffer, self.batch_size)
-                
-                states = torch.tensor([e[0] for e in batch], device=self.device, dtype=torch.float32)
-                actions = torch.tensor([e[1] for e in batch], device=self.device, dtype=torch.long).unsqueeze(1)
-                rewards = torch.tensor([e[2] for e in batch], device=self.device, dtype=torch.float32)
-                next_states = torch.tensor([e[3] for e in batch], device=self.device, dtype=torch.float32)
+            self.buffer_index = (self.buffer_index + 1) % self.buffer_max
+            self.buffer_size = min(self.buffer_size+1,self.buffer_max)
+            
+            if self.n_frame % 16 == 0 and self.buffer_size > self.batch_size :
+                indices = np.random.randint(0, self.buffer_size, size=self.batch_size)
+            
+                states = torch.as_tensor(self.buffer_state[indices], dtype=torch.float32, device=self.device)
+                actions = torch.as_tensor(self.buffer_action[indices], dtype=torch.long, device=self.device)
+                rewards = torch.as_tensor(self.buffer_reward[indices], dtype=torch.float32, device=self.device)
+                next_states = torch.as_tensor(self.buffer_state_new[indices], dtype=torch.float32, device=self.device)
                 
                 with torch.inference_mode():
                     esperances_new_state = self.model(next_states)
@@ -382,7 +384,7 @@ class Car :
                 target = target.clone().detach()
                     
                 esperances = self.model(states)
-                pred = esperances.gather(1, actions).squeeze(1) 
+                pred = esperances.gather(1, actions.unsqueeze(1)).squeeze(1) 
                 
                 loss = self.loss_criterion(pred, target)
                 self.optimizer.zero_grad()
@@ -468,23 +470,22 @@ def centre_piste():
     return bord, bord_ext
 
 bord, bord_ext = centre_piste()
-np_bord = np.array(bord)
-np_bord_ext = np.array(bord_ext)
+np_bord = np.array(bord, dtype=np.float32)
+np_bord_ext = np.array(bord_ext, dtype=np.float32)
 
 @njit
 def liste_angles(np_bord, np_bord_ext):
     angles = []
     for i in range(len(np_bord)) : 
-        normale = np_bord[i]-np_bord_ext[i]
-        tangente = np_bord[i]-np_bord[i+1]
-        cross = tangente[0]*normale[1]-tangente[1]*normale[0]
-        if cross > 0 :
-            angle_target = np.atan2(np_bord[i][1]-np_bord_ext[i][1],np_bord[i][0]-np_bord_ext[i][0])+np.pi/2
-        else:
-            angle_target = np.atan2(np_bord[i][1]-np_bord_ext[i][1],np_bord[i][0]-np_bord_ext[i][0])-np.pi/2
-        angle_target = np.degrees(-angle_target)
+        cx1 = (np_bord[i][0]+np_bord_ext[i][0])/2
+        cy1 = (np_bord[i][1]+np_bord_ext[i][1])/2
+        cx2 = (np_bord[i+1][0]+np_bord_ext[i+1][0])/2
+        cy2 = (np_bord[i+1][1]+np_bord_ext[i+1][1])/2
+        dx = cx2 - cx1
+        dy = cy2 - cy1
+        angle_target = np.degrees(np.atan2(-dy, dx))%360
         angles.append(angle_target)
-    return np.array(angles)
+    return np.array(angles, dtype = np.float32)
 
 angles = liste_angles(np_bord, np_bord_ext)
 
@@ -500,7 +501,7 @@ def load(car, filename="save.pth"):
         car.model.load_state_dict(sauvegarde["model"])
         car.model.to(car.device)
         car.optimizer.load_state_dict(sauvegarde["optimizer"])
-        # car.optimizer = optim.Adam(car.model.parameters(), lr=0.0001) # pour changer le learning rate
+        #car.optimizer = optim.Adam(car.model.parameters(), lr=0.0005) # pour changer le learning rate
         car.n_games = sauvegarde["n_game"]
         print(f"✅ model chargée depuis {filename}")
     except Exception as e:
@@ -514,9 +515,11 @@ map_fini = False
 car = Car()
 
 sauvegarde = load(car, filename="save.pth")
+#car.model = torch.compile(car.model)
     
 
 scores_moy_plot = []
+reward_plot = []
 scores_plot = []
 score_moy = []
 reward_moy_plot = []
@@ -574,6 +577,7 @@ def train():
     print("record : "+str(round(record,2))+"s")
     print()
     reward_moy.append(car.n_mort) #car.reward_tot
+    reward_plot.append(car.n_mort)
     score_moy.append(scores_plot[-1])
     while len(score_moy)>100:
         score_moy.pop(0)
@@ -582,16 +586,14 @@ def train():
     scores_moy_plot.append(round(sum(score_moy)/len(score_moy),2))
     reward_moy_plot.append(round(sum(reward_moy)/len(reward_moy),2))
     
-    plot(scores_plot,scores_moy_plot,reward_moy_plot)
+    plot(scores_plot,scores_moy_plot,reward_plot, reward_moy_plot)
     
     if ancien_affichage != affichage:
         affichage = ancien_affichage
         
-# =============================================================================
-#     profiler.disable()
-#     stats = pstats.Stats(profiler).sort_stats('cumtime')
-#     stats.print_stats(16)  # Affiche les 50 fonctions les plus lentes
-# =============================================================================
+    profiler.disable()
+    stats = pstats.Stats(profiler).sort_stats('cumtime')
+    stats.print_stats(16)  # Affiche les 50 fonctions les plus lentes
     
 while True:
     train()
