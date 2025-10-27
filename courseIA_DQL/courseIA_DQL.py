@@ -12,10 +12,12 @@ import torch.nn as nn
 from numba import njit
 import numpy as np
 
-import cProfile, pstats
-
-profiler = cProfile.Profile()
-profiler.enable()
+# =============================================================================
+# import cProfile, pstats
+# 
+# profiler = cProfile.Profile()
+# profiler.enable()
+# =============================================================================
 
 pygame.init()
 
@@ -50,18 +52,14 @@ def affiche(text, position, color = noir, taille = 20):
 
 # distance
 @njit
-def dist(np_bord, np_bord_ext, new_dist, pos_x, pos_y, i_min, i_max, angle, angles):
+def dist(np_bord, np_bord_ext, new_dist, pos_x, pos_y, i_min, i_max):
     dist_min = ((np_bord[new_dist][0]-pos_x)**2 + (np_bord[new_dist][1]-pos_y)**2)**0.5
     for i in range(i_min, i_max):
         if ((np_bord[i][0]-pos_x)**2 + (np_bord[i][1]-pos_y)**2)**0.5 < dist_min:
             dist_min = ((np_bord[i][0]-pos_x)**2 + (np_bord[i][1]-pos_y)**2)**0.5
             new_dist = i
 
-    diff_angle = angles[new_dist] - angle
-    diff_angle = (diff_angle+540)%360-180 # intervalle [-180, 180[
-    diff_angle = (diff_angle+180)/360 # normalisation  
-
-    return new_dist, dist_min/100, diff_angle
+    return new_dist
 
 # avancer
 @njit
@@ -113,6 +111,20 @@ def tour(quart_tour,pos, Largeur):
         if pos[1]<425 and pos[0]<2*Largeur/3: # en haut à gauche
             quart_tour -= 1
     return quart_tour
+
+# state
+@njit
+def point_state(pos, angle, point):    
+    norme_normalise = ((point[0] - pos[0])**2 + (point[1] - pos[1])**2)**0.5/100
+    
+    angle_rad = np.radians(-angle)
+    angle_point = np.arctan2(point[1] - pos[1], point[0] - pos[0])
+    angle = angle_point - angle_rad
+    angle_normalise = ((angle + 3*np.pi) % (2*np.pi) - np.pi + np.pi) / (2*np.pi)
+    # (|entre -pi et pi| (angle + 3*pi) % (2*pi) - pi |normalisation| + pi) / (pi -(-pi))
+    
+    return [float(angle_normalise), float(norme_normalise)]
+    
     
 # =============================================================================
 
@@ -143,11 +155,9 @@ class Car :
         self.gamma = 0.99 # long ou court terme
                         
         self.model = nn.Sequential(
-            nn.Linear(in_features=15,out_features=64),
+            nn.Linear(in_features=13,out_features=32),
             nn.ReLU(),
-            nn.Linear(in_features=64, out_features=64),
-            nn.ReLU(),
-            nn.Linear(in_features=64, out_features=6)
+            nn.Linear(in_features=32, out_features=6)
             )
         
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.0050)  
@@ -161,10 +171,10 @@ class Car :
         self.buffer_size = 0
         self.buffer_index = 0
         
-        self.buffer_state = np.zeros((self.buffer_max, 15))
+        self.buffer_state = np.zeros((self.buffer_max, 13))
         self.buffer_action = np.zeros((self.buffer_max,))
         self.buffer_reward = np.zeros((self.buffer_max,))
-        self.buffer_state_new = np.zeros((self.buffer_max, 15))
+        self.buffer_state_new = np.zeros((self.buffer_max, 13))
         
     def reset(self):            
         self.reward_tot = 0
@@ -184,10 +194,6 @@ class Car :
         self.n_games += 1
         self.reward = 0
         self.pause = 0
-        self.dist_bord = 2.0
-        self.dist_centre_old = 10
-        self.diff_angle = 0
-        self.diff_angle_old = 0
         self.distance_parcouru = 0
         self.distance()
         self.reward = 0
@@ -204,8 +210,7 @@ class Car :
         i_min = max(0, self.distance_parcouru - 10)
         i_max = min(len(bord), self.distance_parcouru + 10)
         
-        new_dist, self.dist_bord, self.diff_angle = dist(np_bord, np_bord_ext, int(self.distance_parcouru), np.float32(self.position.x), np.float32(self.position.y), int(i_min), int(i_max), int(self.angle), angles)
-        
+        new_dist = dist(np_bord, np_bord_ext, int(self.distance_parcouru), np.float32(self.position.x), np.float32(self.position.y), int(i_min), int(i_max))
         
         self.reward += (new_dist-self.distance_parcouru)*0.001
         
@@ -257,15 +262,11 @@ class Car :
 
             vitesse_actuelle = self.position - self.pos_old
                      
-            state = [float((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4),
-                     float(self.dist_bord),
-                     float(self.diff_angle)]
+            state = [float((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4)]
             for i in range(0, 120, 40):
-                state += [float(np_bord[self.distance_parcouru+i][0]/Largeur), 
-                          float(np_bord[self.distance_parcouru+i][1]/Hauteur),
-                          float(np_bord_ext[self.distance_parcouru+i][0]/Largeur),
-                          float(np_bord_ext[self.distance_parcouru+i][1]/Hauteur)]
-                
+                state += point_state((np.float32(self.position.x),np.float32(self.position.y)), int(self.angle), np_bord[self.distance_parcouru+i])
+                state += point_state((np.float32(self.position.x),np.float32(self.position.y)), int(self.angle), np_bord_ext[self.distance_parcouru+i])
+
 # =============================== récupération de l'action =============================================
             
             epsilon = max(1,100-self.n_games)
@@ -352,14 +353,11 @@ class Car :
 
             vitesse_actuelle = self.position - self.pos_old
                      
-            state_new = [float((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4),
-                     float(self.dist_bord),
-                     float(self.diff_angle)]
+            state_new = [float((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4)]
             for i in range(0, 120, 40):
-                state_new += [float(np_bord[self.distance_parcouru+i][0]/Largeur), 
-                              float(np_bord[self.distance_parcouru+i][1]/Hauteur),
-                              float(np_bord_ext[self.distance_parcouru+i][0]/Largeur),
-                              float(np_bord_ext[self.distance_parcouru+i][1]/Hauteur)]
+                state_new += point_state((np.float32(self.position.x),np.float32(self.position.y)), int(self.angle), np_bord[self.distance_parcouru+i])
+                state_new += point_state((np.float32(self.position.x),np.float32(self.position.y)), int(self.angle), np_bord_ext[self.distance_parcouru+i])
+
             
             self.buffer_state[self.buffer_index] = state
             self.buffer_action[self.buffer_index] = action
@@ -591,9 +589,11 @@ def train():
     if ancien_affichage != affichage:
         affichage = ancien_affichage
         
-    profiler.disable()
-    stats = pstats.Stats(profiler).sort_stats('cumtime')
-    stats.print_stats(16)  # Affiche les 50 fonctions les plus lentes
+# =============================================================================
+#     profiler.disable()
+#     stats = pstats.Stats(profiler).sort_stats('cumtime')
+#     stats.print_stats(16)  # Affiche les 50 fonctions les plus lentes
+# =============================================================================
     
 while True:
     train()
