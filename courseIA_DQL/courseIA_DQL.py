@@ -43,7 +43,7 @@ def affiche(text, position, color = noir, taille = 20):
     global affichage
     if affichage == True: 
         police=pygame.font.SysFont('arial',taille)
-        texte=police.render(text,True,noir)
+        texte=police.render(text,True,color)
         zoneTexte = texte.get_rect()
         zoneTexte.center = position
         Zone_jeu.blit(texte,zoneTexte)
@@ -114,16 +114,26 @@ def tour(quart_tour,pos, Largeur):
 
 # state
 @njit
-def point_state(pos, angle, point):    
+def point_state(pos, angle_voiture, point):    
     norme_normalise = ((point[0] - pos[0])**2 + (point[1] - pos[1])**2)**0.5/100
     
-    angle_rad = np.radians(-angle)
+    angle_rad = np.radians(-angle_voiture)
     angle_point = np.arctan2(point[1] - pos[1], point[0] - pos[0])
     angle = angle_point - angle_rad
-    angle_normalise = ((angle + 3*np.pi) % (2*np.pi) - np.pi + np.pi) / (2*np.pi)
+    angle_normalise = ((angle + 3*np.pi) % (2*np.pi)) / (2*np.pi)
     # (|entre -pi et pi| (angle + 3*pi) % (2*pi) - pi |normalisation| + pi) / (pi -(-pi))
     
-    return [float(angle_normalise), float(norme_normalise)]
+    return [np.float32(angle_normalise), np.float32(norme_normalise)]
+
+@njit
+def vecteur_vitesse(vx,vy, angle_voiture):
+    norme_normalise = (vx**2 + vy**2)**0.5/4
+    angle_rad = np.radians(-angle_voiture)
+    direction = np.arctan2(vy,vx)
+    angle = direction - angle_rad
+    angle_normalise = ((angle + 3*np.pi) % (2*np.pi)) / (2*np.pi)
+    
+    return [np.float32(angle_normalise), np.float32(norme_normalise)]
     
     
 # =============================================================================
@@ -155,12 +165,16 @@ class Car :
         self.gamma = 0.99 # long ou court terme
                         
         self.model = nn.Sequential(
-            nn.Linear(in_features=13,out_features=32),
+            nn.Linear(in_features=14,out_features=32),
+            nn.ReLU(),
+            nn.Linear(in_features=32,out_features=32),
+            nn.ReLU(),
+            nn.Linear(in_features=32,out_features=32),
             nn.ReLU(),
             nn.Linear(in_features=32, out_features=6)
             )
         
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.0050)  
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.00005)  
         self.loss_criterion = nn.MSELoss()
         self.device = torch.device("cpu")      #"cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
@@ -171,10 +185,10 @@ class Car :
         self.buffer_size = 0
         self.buffer_index = 0
         
-        self.buffer_state = np.zeros((self.buffer_max, 13))
+        self.buffer_state = np.zeros((self.buffer_max, 14))
         self.buffer_action = np.zeros((self.buffer_max,))
         self.buffer_reward = np.zeros((self.buffer_max,))
-        self.buffer_state_new = np.zeros((self.buffer_max, 13))
+        self.buffer_state_new = np.zeros((self.buffer_max, 14))
         
     def reset(self):            
         self.reward_tot = 0
@@ -262,7 +276,7 @@ class Car :
 
             vitesse_actuelle = self.position - self.pos_old
                      
-            state = [float((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4)]
+            state = vecteur_vitesse(np.float32(vitesse_actuelle[0]), np.float32(vitesse_actuelle[1]), int(self.angle))
             for i in range(0, 120, 40):
                 state += point_state((np.float32(self.position.x),np.float32(self.position.y)), int(self.angle), np_bord[self.distance_parcouru+i])
                 state += point_state((np.float32(self.position.x),np.float32(self.position.y)), int(self.angle), np_bord_ext[self.distance_parcouru+i])
@@ -273,7 +287,7 @@ class Car :
             
             if random.randint(0,100) > epsilon :
                 with torch.inference_mode():
-                    action = torch.argmax(self.model(torch.tensor(state))).item()
+                    action = torch.argmax(self.model(torch.tensor(state, dtype=torch.float32, device=self.device))).item()
             else :
                 action = random.randint(0,5) 
 
@@ -353,7 +367,7 @@ class Car :
 
             vitesse_actuelle = self.position - self.pos_old
                      
-            state_new = [float((vitesse_actuelle.x**2+vitesse_actuelle.y**2)**0.5/4)]
+            state_new = vecteur_vitesse(np.float32(vitesse_actuelle[0]), np.float32(vitesse_actuelle[1]), int(self.angle))
             for i in range(0, 120, 40):
                 state_new += point_state((np.float32(self.position.x),np.float32(self.position.y)), int(self.angle), np_bord[self.distance_parcouru+i])
                 state_new += point_state((np.float32(self.position.x),np.float32(self.position.y)), int(self.angle), np_bord_ext[self.distance_parcouru+i])
@@ -499,7 +513,7 @@ def load(car, filename="save.pth"):
         car.model.load_state_dict(sauvegarde["model"])
         car.model.to(car.device)
         car.optimizer.load_state_dict(sauvegarde["optimizer"])
-        #car.optimizer = optim.Adam(car.model.parameters(), lr=0.0005) # pour changer le learning rate
+        #car.optimizer = optim.Adam(car.model.parameters(), lr=0.00001) # pour changer le learning rate
         car.n_games = sauvegarde["n_game"]
         print(f"✅ model chargée depuis {filename}")
     except Exception as e:
