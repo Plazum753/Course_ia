@@ -171,10 +171,12 @@ class Car :
             nn.ReLU(),
             nn.Linear(in_features=32,out_features=32),
             nn.ReLU(),
+            nn.Linear(in_features=32,out_features=32),
+            nn.ReLU(),
             nn.Linear(in_features=32, out_features=6)
             )
         
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.00005)  
+        self.optimizer = optim.Adam(self.model.parameters(), lr=0.00001)  
         self.loss_criterion = nn.MSELoss()
         self.device = torch.device("cpu")      #"cuda" if torch.cuda.is_available() else "cpu")
         self.model.to(self.device)
@@ -283,7 +285,7 @@ class Car :
 
 # =============================== récupération de l'action =============================================
             
-            epsilon = max(1,100-self.n_games)
+            epsilon = max(1,100-self.n_games/2)
             
             if random.randint(0,100) > epsilon :
                 with torch.inference_mode():
@@ -513,7 +515,7 @@ def load(car, filename="save.pth"):
         car.model.load_state_dict(sauvegarde["model"])
         car.model.to(car.device)
         car.optimizer.load_state_dict(sauvegarde["optimizer"])
-        #car.optimizer = optim.Adam(car.model.parameters(), lr=0.00001) # pour changer le learning rate
+        #car.optimizer = optim.Adam(car.model.parameters(), lr=10**-6) # pour changer le learning rate
         car.n_games = sauvegarde["n_game"]
         print(f"✅ model chargée depuis {filename}")
     except Exception as e:
