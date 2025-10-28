@@ -19,6 +19,8 @@ import numpy as np
 # profiler.enable()
 # =============================================================================
 
+affichage = False #TODO
+
 pygame.init()
 
 vert=(0,180,0)
@@ -316,10 +318,20 @@ class Car :
             )
         self.model1_valeur = nn.Sequential(
             nn.Linear(in_features=64,out_features=64),
+            nn.LayerNorm(64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=64),
             nn.ReLU(),
             nn.Linear(in_features=64, out_features=1)
             )
         self.model1_avantages = nn.Sequential(
+            nn.Linear(in_features=64,out_features=64),
+            nn.LayerNorm(64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=64),
+            nn.ReLU(),
             nn.Linear(in_features=64,out_features=64),
             nn.ReLU(),
             nn.Linear(in_features=64, out_features=6)
@@ -337,10 +349,20 @@ class Car :
             )
         self.model2_valeur = nn.Sequential(
             nn.Linear(in_features=64,out_features=64),
+            nn.LayerNorm(64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=64),
             nn.ReLU(),
             nn.Linear(in_features=64, out_features=1)
             )
         self.model2_avantages = nn.Sequential(
+            nn.Linear(in_features=64,out_features=64),
+            nn.LayerNorm(64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=64),
+            nn.ReLU(),
             nn.Linear(in_features=64,out_features=64),
             nn.ReLU(),
             nn.Linear(in_features=64, out_features=6)
@@ -361,7 +383,7 @@ class Car :
             )  
         
         self.loss_criterion = nn.MSELoss()
-        self.device = torch.device("cpu")      #"cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model1_features.to(self.device)
         self.model1_valeur.to(self.device)
         self.model1_avantages.to(self.device)
@@ -456,7 +478,6 @@ class Car :
         return np.all(np.abs(terrain_array[x, y] - couleur) < 25)
             
     def Jeux(self):
-        global map_fini
         global  np_bord 
         global np_bord_ext 
         global angles
@@ -474,7 +495,7 @@ class Car :
 
 # =============================== récupération de l'action =============================================
             
-            epsilon = max(2,100-self.n_games/4)
+            epsilon = max(2,100-self.n_games/3)
             
             if random.randint(0,100) > epsilon :
                 with torch.inference_mode():
@@ -594,7 +615,7 @@ class Car :
                         
                         # calcul de target
                         next_features = self.model2_features(next_states)
-                        next_valeur = self.model2_valeur(next_features)
+                        next_valeur = self.model2_valeur(next_features).squeeze(1)
                         next_avantages = self.model2_avantages(next_features)
                         
                         next_avantage = next_avantages.gather(1, max_next_action.unsqueeze(1)).squeeze(1)
@@ -603,7 +624,7 @@ class Car :
                     target = target.clone().detach()
                     
                     features = self.model1_features(states)
-                    valeur = self.model1_valeur(features)
+                    valeur = self.model1_valeur(features).squeeze(1)
                     avantages = self.model1_avantages(features)
                     mean_avantages = avantages.mean(dim=1)
                     avantage = avantages.gather(1, actions.unsqueeze(1)).squeeze(1)
@@ -624,7 +645,7 @@ class Car :
                         
                         # calcul de target
                         next_features = self.model1_features(next_states)
-                        next_valeur = self.model1_valeur(next_features)
+                        next_valeur = self.model1_valeur(next_features).squeeze(1)
                         next_avantages = self.model1_avantages(next_features)
                         
                         next_avantage = next_avantages.gather(1, max_next_action.unsqueeze(1)).squeeze(1)
@@ -633,7 +654,7 @@ class Car :
                     target = target.clone().detach()
                     
                     features = self.model2_features(states)
-                    valeur = self.model2_valeur(features)
+                    valeur = self.model2_valeur(features).squeeze(1)
                     avantages = self.model2_avantages(features)
                     mean_avantages = avantages.mean(dim=1)
                     avantage = avantages.gather(1, actions.unsqueeze(1)).squeeze(1)
@@ -648,10 +669,6 @@ class Car :
             self.reward_tot += self.reward
             self.n_frame += 1
     
-    
-affichage = False #TODO
-map_fini = False
-
 car = Car()
 
 sauvegarde = load(car, filename="save.pth")    
@@ -665,7 +682,6 @@ reward_moy = []
 record = 10**6
 
 def train():
-    global map_fini
     global record
     global affichage
     
