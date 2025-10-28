@@ -10,7 +10,7 @@ import torch.optim as optim
 import torch.nn as nn
 
 from numba import njit
-import numpy as np
+import numpy as np 
 
 # =============================================================================
 # import cProfile, pstats
@@ -47,6 +47,146 @@ def affiche(text, position, color = noir, taille = 20):
         zoneTexte = texte.get_rect()
         zoneTexte.center = position
         Zone_jeu.blit(texte,zoneTexte)
+        
+def isbord(x, y, couleur=(95,207,43)):   
+    return np.all(np.abs(terrain_array[x, y] - couleur) < 50)
+    
+def point_new(point_old):
+    test = ((-1,-1),(-1,0),(-1,1),(0,1),(1,1),(1,0),(1,-1),(0,-1))    
+
+    compteur = 0
+    while not isbord(point_old[0]+test[compteur][0], point_old[1]+test[compteur][1]) :
+        compteur = (compteur+1)%8
+    while isbord(point_old[0]+test[compteur][0], point_old[1]+test[compteur][1]) :
+        compteur = (compteur+1)%8
+    return (point_old[0]+test[compteur][0], point_old[1]+test[compteur][1])
+
+@njit
+def meme_taille(A,B):
+    compteur = 0
+    C = []
+    if len(A) > len(B):
+        frequence = len(A)/(len(A)-len(B))
+        for i in range(len(A)):
+            if i > compteur :
+                compteur += frequence
+            else :
+                C.append(A[i])
+        return C,B
+    elif len(A) < len(B):
+        frequence = len(B)/(len(B)-len(A))
+        for i in range(len(B)):
+            if i > compteur :
+                compteur += frequence
+            else :
+                C.append(B[i])
+        return A,C
+    return A,B
+    
+
+def centre_piste():
+    bord0 = []
+
+    point = (812,412) #­ premier point de collision à gauche de la ligne d'arrivée
+
+    while point not in bord0 :
+        bord0.append(point)
+        point = point_new(point)
+        #pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
+    bord_ext0 = []
+    point = (884,412)
+    while point not in bord_ext0 :
+        bord_ext0.append(point)
+        point = point_new(point)
+        #pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
+    bord_ext0.reverse()    
+    
+    indices = ((0,0),(100,100),(170,310),(300,460),(740,850),(800,1100),(850,1250),(1100,1525),(1250,1610),(1415,1660),(1550,1810),(1605,2000),(1700,2125),(2070,2500),(2190,2700),(2250,2860),(2340,2915),(-1,-1))
+    
+    # for i in indices :
+    #     pygame.draw.rect(terrain, (255,0,0), (bord0[i[0]][0],bord0[i[0]][1],4,4), 2)
+    #     pygame.draw.rect(terrain, (255,0,0), (bord_ext0[i[1]][0],bord_ext0[i[1]][1],4,4), 2)
+    
+    bord = []   
+    bord_ext = []
+    for i in range(len(indices)-1):
+        b,b_ext = meme_taille(bord0[indices[i][0]:indices[i+1][0]], bord_ext0[indices[i][1]:indices[i+1][1]])
+        bord += b
+        bord_ext += b_ext
+       
+    # for point in bord:
+    #     pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
+    # for point in bord_ext:
+    #     pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
+    
+    bord = tuple(bord[-100:]+bord+bord+bord+bord[:200]) # il faut une marge | bord[-100:] la voiture commence avant la ligne d'arrivée
+    bord_ext = tuple(bord_ext[-100:]+bord_ext+bord_ext+bord_ext+bord_ext[:200]) 
+    return bord, bord_ext
+
+bord, bord_ext = centre_piste()
+np_bord = np.array(bord, dtype=np.float32)
+np_bord_ext = np.array(bord_ext, dtype=np.float32)
+
+@njit
+def liste_angles(np_bord, np_bord_ext):
+    angles = []
+    for i in range(len(np_bord)) : 
+        cx1 = (np_bord[i][0]+np_bord_ext[i][0])/2
+        cy1 = (np_bord[i][1]+np_bord_ext[i][1])/2
+        cx2 = (np_bord[i+1][0]+np_bord_ext[i+1][0])/2
+        cy2 = (np_bord[i+1][1]+np_bord_ext[i+1][1])/2
+        dx = cx2 - cx1
+        dy = cy2 - cy1
+        angle_target = np.degrees(np.atan2(-dy, dx))%360
+        angles.append(angle_target)
+    return np.array(angles, dtype = np.float32)
+
+angles = liste_angles(np_bord, np_bord_ext)
+
+def save(car, filename="save.pth"):
+    torch.save({
+    'model_feature1': car.model1_features.state_dict(),
+    'model_valeur1': car.model1_valeur.state_dict(),
+    'model_avantages1': car.model1_avantages.state_dict(),
+    
+    'model_feature2': car.model2_features.state_dict(),
+    'model_valeur2': car.model2_valeur.state_dict(),
+    'model_avantages2': car.model2_avantages.state_dict(),
+    
+    'optimizer1': car.optimizer1.state_dict(),
+    'optimizer2': car.optimizer2.state_dict(),
+    
+    'n_game': car.n_games}, filename)
+    print(f"💾 Modèle sauvegardé dans {filename}")
+    
+def load(car, filename="save.pth"):
+    try:
+        sauvegarde = torch.load(filename)
+        car.model1_features.load_state_dict(sauvegarde["model_feature1"])
+        car.model1_valeur.load_state_dict(sauvegarde["model_valeur1"])
+        car.model1_avantages.load_state_dict(sauvegarde["model_avantages1"])
+        
+        car.model2_features.load_state_dict(sauvegarde["model_feature2"])
+        car.model2_valeur.load_state_dict(sauvegarde["model_valeur2"])
+        car.model2_avantages.load_state_dict(sauvegarde["model_avantages2"])
+        
+        car.model1_features.to(car.device)
+        car.model1_valeur.to(car.device)
+        car.model1_avantages.to(car.device)
+        car.model2_features.to(car.device)
+        car.model2_valeur.to(car.device)
+        car.model2_avantages.to(car.device)
+        
+        car.optimizer1.load_state_dict(sauvegarde["optimizer1"])
+        car.optimizer2.load_state_dict(sauvegarde["optimizer2"])
+        
+        car.n_games = sauvegarde["n_game"]
+        
+        print(f"✅ model chargée depuis {filename}")
+    except Exception as e:
+        print("❌ Erreur lors du chargement du model :", e)
+        return None
+
 
 # ============================= foction du programme ================================================
 
@@ -138,7 +278,6 @@ def vecteur_vitesse(vx,vy, angle_voiture):
     
 # =============================================================================
 
-
 class Car :
     def __init__(self,x=837,y=440 ,Q_table = {}, voiture = 'f1.png', voiture_taille = 60):        
         self.voitureLargeur=1920/voiture_taille #450/16
@@ -163,23 +302,65 @@ class Car :
         self.n_games = 0
         
         self.gamma = 0.99 # long ou court terme
-                        
-        self.model = nn.Sequential(
+
+# =============================================================================
+        self.model1_features = nn.Sequential(
             nn.Linear(in_features=14,out_features=32),
             nn.ReLU(),
             nn.Linear(in_features=32,out_features=32),
             nn.ReLU(),
+            )
+        self.model1_valeur = nn.Sequential(
             nn.Linear(in_features=32,out_features=32),
             nn.ReLU(),
+            nn.Linear(in_features=32, out_features=1)
+            )
+        self.model1_avantages = nn.Sequential(
             nn.Linear(in_features=32,out_features=32),
             nn.ReLU(),
             nn.Linear(in_features=32, out_features=6)
             )
+# =============================================================================
+        self.model2_features = nn.Sequential(
+            nn.Linear(in_features=14,out_features=32),
+            nn.ReLU(),
+            nn.Linear(in_features=32,out_features=32),
+            nn.ReLU(),
+            )
+        self.model2_valeur = nn.Sequential(
+            nn.Linear(in_features=32,out_features=32),
+            nn.ReLU(),
+            nn.Linear(in_features=32, out_features=1)
+            )
+        self.model2_avantages = nn.Sequential(
+            nn.Linear(in_features=32,out_features=32),
+            nn.ReLU(),
+            nn.Linear(in_features=32, out_features=6)
+            )
+# =============================================================================
+
+        self.optimizer1 = optim.Adam(
+            list(self.model1_features.parameters()) +
+            list(self.model1_valeur.parameters()) +
+            list(self.model1_avantages.parameters()),
+            lr=10**-5
+            )  
+        self.optimizer2 = optim.Adam(
+            list(self.model2_features.parameters()) +
+            list(self.model2_valeur.parameters()) +
+            list(self.model2_avantages.parameters()),
+            lr=10**-5
+            )  
         
-        self.optimizer = optim.Adam(self.model.parameters(), lr=0.00001)  
         self.loss_criterion = nn.MSELoss()
         self.device = torch.device("cpu")      #"cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(self.device)
+        self.model1_features.to(self.device)
+        self.model1_valeur.to(self.device)
+        self.model1_avantages.to(self.device)
+        self.model2_features.to(self.device)
+        self.model2_valeur.to(self.device)
+        self.model2_avantages.to(self.device)
+
         
         self.batch_size = 256
         
@@ -289,7 +470,11 @@ class Car :
             
             if random.randint(0,100) > epsilon :
                 with torch.inference_mode():
-                    action = torch.argmax(self.model(torch.tensor(state, dtype=torch.float32, device=self.device))).item()
+                    features1 = self.model1_features(torch.tensor(state, dtype=torch.float32, device=self.device))
+                    avantages1 = self.model1_avantages(features1)
+                    features2 = self.model2_features(torch.tensor(state, dtype=torch.float32, device=self.device))
+                    avantages2 = self.model2_avantages(features2)
+                    action = torch.argmax((avantages1+avantages2)/2).item()
             else :
                 action = random.randint(0,5) 
 
@@ -391,136 +576,69 @@ class Car :
                 rewards = torch.as_tensor(self.buffer_reward[indices], dtype=torch.float32, device=self.device)
                 next_states = torch.as_tensor(self.buffer_state_new[indices], dtype=torch.float32, device=self.device)
                 
-                with torch.inference_mode():
-                    esperances_new_state = self.model(next_states)
-                    max_esperances, max_actions = esperances_new_state.max(dim=1)
-                    target = rewards + self.gamma * max_esperances 
-                target = target.clone().detach()
+                if random.randint(0,1) == 0:
+                    # mise à jour du model 1
+                    with torch.inference_mode():
+                        # choix de la prochaine action
+                        next_features_choix = self.model1_features(next_states)
+                        next_action = self.model1_avantages(next_features_choix)
+                        _, max_next_action = next_action.max(dim=1)
+                        
+                        # calcul de target
+                        next_features = self.model2_features(next_states)
+                        next_valeur = self.model2_valeur(next_features)
+                        next_avantages = self.model2_avantages(next_features)
+                        
+                        next_avantage = next_avantages.gather(1, max_next_action.unsqueeze(1)).squeeze(1)
+                        mean_next_avantages = next_avantages.mean(dim=1)
+                        target = rewards + self.gamma * (next_valeur + next_avantage - mean_next_avantages)
+                    target = target.clone().detach()
                     
-                esperances = self.model(states)
-                pred = esperances.gather(1, actions.unsqueeze(1)).squeeze(1) 
-                
-                loss = self.loss_criterion(pred, target)
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
+                    features = self.model1_features(states)
+                    valeur = self.model1_valeur(features)
+                    avantages = self.model1_avantages(features)
+                    mean_avantages = avantages.mean(dim=1)
+                    avantage = avantages.gather(1, actions.unsqueeze(1)).squeeze(1)
+                    
+                    pred = valeur + avantage - mean_avantages
+                    
+                    loss = self.loss_criterion(pred, target)
+                    self.optimizer1.zero_grad()
+                    loss.backward()
+                    self.optimizer1.step()
+                else :
+                    # mise à jour du model 2
+                    with torch.inference_mode():
+                        # choix de la prochaine action
+                        next_features_choix = self.model2_features(next_states)
+                        next_action = self.model2_avantages(next_features_choix)
+                        _, max_next_action = next_action.max(dim=1)
+                        
+                        # calcul de target
+                        next_features = self.model1_features(next_states)
+                        next_valeur = self.model1_valeur(next_features)
+                        next_avantages = self.model1_avantages(next_features)
+                        
+                        next_avantage = next_avantages.gather(1, max_next_action.unsqueeze(1)).squeeze(1)
+                        mean_next_avantages = next_avantages.mean(dim=1)
+                        target = rewards + self.gamma * (next_valeur + next_avantage - mean_next_avantages)
+                    target = target.clone().detach()
+                    
+                    features = self.model2_features(states)
+                    valeur = self.model2_valeur(features)
+                    avantages = self.model2_avantages(features)
+                    mean_avantages = avantages.mean(dim=1)
+                    avantage = avantages.gather(1, actions.unsqueeze(1)).squeeze(1)
+                    
+                    pred = valeur + avantage - mean_avantages
+                    
+                    loss = self.loss_criterion(pred, target)
+                    self.optimizer2.zero_grad()
+                    loss.backward()
+                    self.optimizer2.step()
                 
             self.reward_tot += self.reward
             self.n_frame += 1
-
-def isbord(x, y, couleur=(95,207,43)):   
-    return np.all(np.abs(terrain_array[x, y] - couleur) < 50)
-    
-def point_new(point_old):
-    test = ((-1,-1),(-1,0),(-1,1),(0,1),(1,1),(1,0),(1,-1),(0,-1))    
-
-    compteur = 0
-    while not isbord(point_old[0]+test[compteur][0], point_old[1]+test[compteur][1]) :
-        compteur = (compteur+1)%8
-    while isbord(point_old[0]+test[compteur][0], point_old[1]+test[compteur][1]) :
-        compteur = (compteur+1)%8
-    return (point_old[0]+test[compteur][0], point_old[1]+test[compteur][1])
-
-@njit
-def meme_taille(A,B):
-    compteur = 0
-    C = []
-    if len(A) > len(B):
-        frequence = len(A)/(len(A)-len(B))
-        for i in range(len(A)):
-            if i > compteur :
-                compteur += frequence
-            else :
-                C.append(A[i])
-        return C,B
-    elif len(A) < len(B):
-        frequence = len(B)/(len(B)-len(A))
-        for i in range(len(B)):
-            if i > compteur :
-                compteur += frequence
-            else :
-                C.append(B[i])
-        return A,C
-    return A,B
-    
-
-def centre_piste():
-    bord0 = []
-
-    point = (812,412) #­ premier point de collision à gauche de la ligne d'arrivée
-
-    while point not in bord0 :
-        bord0.append(point)
-        point = point_new(point)
-        #pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
-    bord_ext0 = []
-    point = (884,412)
-    while point not in bord_ext0 :
-        bord_ext0.append(point)
-        point = point_new(point)
-        #pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
-    bord_ext0.reverse()    
-    
-    indices = ((0,0),(100,100),(170,310),(300,460),(740,850),(800,1100),(850,1250),(1100,1525),(1250,1610),(1415,1660),(1550,1810),(1605,2000),(1700,2125),(2070,2500),(2190,2700),(2250,2860),(2340,2915),(-1,-1))
-    
-    # for i in indices :
-    #     pygame.draw.rect(terrain, (255,0,0), (bord0[i[0]][0],bord0[i[0]][1],4,4), 2)
-    #     pygame.draw.rect(terrain, (255,0,0), (bord_ext0[i[1]][0],bord_ext0[i[1]][1],4,4), 2)
-    
-    bord = []   
-    bord_ext = []
-    for i in range(len(indices)-1):
-        b,b_ext = meme_taille(bord0[indices[i][0]:indices[i+1][0]], bord_ext0[indices[i][1]:indices[i+1][1]])
-        bord += b
-        bord_ext += b_ext
-       
-    # for point in bord:
-    #     pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
-    # for point in bord_ext:
-    #     pygame.draw.rect(terrain, (255,0,0), (point[0],point[1],2,2), 2)
-    
-    bord = tuple(bord[-100:]+bord+bord+bord+bord[:200]) # il faut une marge | bord[-100:] la voiture commence avant la ligne d'arrivée
-    bord_ext = tuple(bord_ext[-100:]+bord_ext+bord_ext+bord_ext+bord_ext[:200]) 
-    return bord, bord_ext
-
-bord, bord_ext = centre_piste()
-np_bord = np.array(bord, dtype=np.float32)
-np_bord_ext = np.array(bord_ext, dtype=np.float32)
-
-@njit
-def liste_angles(np_bord, np_bord_ext):
-    angles = []
-    for i in range(len(np_bord)) : 
-        cx1 = (np_bord[i][0]+np_bord_ext[i][0])/2
-        cy1 = (np_bord[i][1]+np_bord_ext[i][1])/2
-        cx2 = (np_bord[i+1][0]+np_bord_ext[i+1][0])/2
-        cy2 = (np_bord[i+1][1]+np_bord_ext[i+1][1])/2
-        dx = cx2 - cx1
-        dy = cy2 - cy1
-        angle_target = np.degrees(np.atan2(-dy, dx))%360
-        angles.append(angle_target)
-    return np.array(angles, dtype = np.float32)
-
-angles = liste_angles(np_bord, np_bord_ext)
-
-def save(car, filename="save.pth"):
-    torch.save({
-    'model': car.model.state_dict(),
-    'optimizer': car.optimizer.state_dict(),
-    'n_game': car.n_games}, filename)
-        
-def load(car, filename="save.pth"):
-    try:
-        sauvegarde = torch.load(filename)
-        car.model.load_state_dict(sauvegarde["model"])
-        car.model.to(car.device)
-        car.optimizer.load_state_dict(sauvegarde["optimizer"])
-        #car.optimizer = optim.Adam(car.model.parameters(), lr=10**-6) # pour changer le learning rate
-        car.n_games = sauvegarde["n_game"]
-        print(f"✅ model chargée depuis {filename}")
-    except Exception as e:
-        print("❌ Erreur lors du chargement du model :", e)
-        return None
     
     
 affichage = False #TODO
@@ -528,9 +646,7 @@ map_fini = False
 
 car = Car()
 
-sauvegarde = load(car, filename="save.pth")
-#car.model = torch.compile(car.model)
-    
+sauvegarde = load(car, filename="save.pth")    
 
 scores_moy_plot = []
 reward_plot = []
