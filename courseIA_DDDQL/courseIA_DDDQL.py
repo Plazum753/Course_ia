@@ -305,37 +305,45 @@ class Car :
 
 # =============================================================================
         self.model1_features = nn.Sequential(
-            nn.Linear(in_features=14,out_features=32),
+            nn.Linear(in_features=14,out_features=64),
             nn.ReLU(),
-            nn.Linear(in_features=32,out_features=32),
+            nn.Linear(in_features=64,out_features=64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=64),
             nn.ReLU(),
             )
         self.model1_valeur = nn.Sequential(
-            nn.Linear(in_features=32,out_features=32),
+            nn.Linear(in_features=64,out_features=64),
             nn.ReLU(),
-            nn.Linear(in_features=32, out_features=1)
+            nn.Linear(in_features=64, out_features=1)
             )
         self.model1_avantages = nn.Sequential(
-            nn.Linear(in_features=32,out_features=32),
+            nn.Linear(in_features=64,out_features=64),
             nn.ReLU(),
-            nn.Linear(in_features=32, out_features=6)
+            nn.Linear(in_features=64, out_features=6)
             )
 # =============================================================================
         self.model2_features = nn.Sequential(
-            nn.Linear(in_features=14,out_features=32),
+            nn.Linear(in_features=14,out_features=64),
             nn.ReLU(),
-            nn.Linear(in_features=32,out_features=32),
+            nn.Linear(in_features=64,out_features=64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=64),
+            nn.ReLU(),
+            nn.Linear(in_features=64,out_features=64),
             nn.ReLU(),
             )
         self.model2_valeur = nn.Sequential(
-            nn.Linear(in_features=32,out_features=32),
+            nn.Linear(in_features=64,out_features=64),
             nn.ReLU(),
-            nn.Linear(in_features=32, out_features=1)
+            nn.Linear(in_features=64, out_features=1)
             )
         self.model2_avantages = nn.Sequential(
-            nn.Linear(in_features=32,out_features=32),
+            nn.Linear(in_features=64,out_features=64),
             nn.ReLU(),
-            nn.Linear(in_features=32, out_features=6)
+            nn.Linear(in_features=64, out_features=6)
             )
 # =============================================================================
 
@@ -466,7 +474,7 @@ class Car :
 
 # =============================== récupération de l'action =============================================
             
-            epsilon = max(1,100-self.n_games/2)
+            epsilon = max(2,100-self.n_games/4)
             
             if random.randint(0,100) > epsilon :
                 with torch.inference_mode():
