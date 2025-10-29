@@ -182,6 +182,21 @@ def load(car, filename="save.pth"):
         car.optimizer1.load_state_dict(sauvegarde["optimizer1"])
         car.optimizer2.load_state_dict(sauvegarde["optimizer2"])
         
+# =============================================================================
+#         car.optimizer1 = optim.Adam(
+#             list(car.model1_features.parameters()) +
+#             list(car.model1_valeur.parameters()) +
+#             list(car.model1_avantages.parameters()),
+#             lr=10**-6
+#             )  
+#         car.optimizer2 = optim.Adam(
+#             list(car.model2_features.parameters()) +
+#             list(car.model2_valeur.parameters()) +
+#             list(car.model2_avantages.parameters()),
+#             lr=10**-6
+#             )  
+# =============================================================================
+        
         car.n_games = sauvegarde["n_game"]
         
         print(f"✅ model chargée depuis {filename}")
@@ -307,65 +322,65 @@ class Car :
 
 # =============================================================================
         self.model1_features = nn.Sequential(
-            nn.Linear(in_features=14,out_features=64),
+            nn.Linear(in_features=14,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
             )
         self.model1_valeur = nn.Sequential(
-            nn.Linear(in_features=64,out_features=64),
-            nn.LayerNorm(64),
+            nn.Linear(in_features=256,out_features=256),
+            nn.LayerNorm(256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64, out_features=1)
+            nn.Linear(in_features=256, out_features=1)
             )
         self.model1_avantages = nn.Sequential(
-            nn.Linear(in_features=64,out_features=64),
-            nn.LayerNorm(64),
+            nn.Linear(in_features=256,out_features=256),
+            nn.LayerNorm(256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64, out_features=6)
+            nn.Linear(in_features=256, out_features=6)
             )
 # =============================================================================
         self.model2_features = nn.Sequential(
-            nn.Linear(in_features=14,out_features=64),
+            nn.Linear(in_features=14,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
             )
         self.model2_valeur = nn.Sequential(
-            nn.Linear(in_features=64,out_features=64),
-            nn.LayerNorm(64),
+            nn.Linear(in_features=256,out_features=256),
+            nn.LayerNorm(256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64, out_features=1)
+            nn.Linear(in_features=256, out_features=1)
             )
         self.model2_avantages = nn.Sequential(
-            nn.Linear(in_features=64,out_features=64),
-            nn.LayerNorm(64),
+            nn.Linear(in_features=256,out_features=256),
+            nn.LayerNorm(256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64,out_features=64),
+            nn.Linear(in_features=256,out_features=256),
             nn.ReLU(),
-            nn.Linear(in_features=64, out_features=6)
+            nn.Linear(in_features=256, out_features=6)
             )
 # =============================================================================
 
@@ -439,7 +454,7 @@ class Car :
         
         new_dist = dist(np_bord, np_bord_ext, int(self.distance_parcouru), np.float32(self.position.x), np.float32(self.position.y), int(i_min), int(i_max))
         
-        self.reward += (new_dist-self.distance_parcouru)*0.001
+        self.reward += (new_dist-self.distance_parcouru)*0.005
         
         self.distance_parcouru = new_dist
 
@@ -521,7 +536,7 @@ class Car :
                 droite = False
                 
 # =============================== éxécution de l'action ================================================
-            self.reward = -0.001
+            self.reward = -0.005
                 
             if droite and not gauche:
                 self.rotation_mouvement = -self.maniabilité
