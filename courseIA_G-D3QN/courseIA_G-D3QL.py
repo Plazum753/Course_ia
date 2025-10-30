@@ -19,7 +19,7 @@ import numpy as np
 # profiler.enable()
 # =============================================================================
 
-affichage = False #TODO
+affichage = True #TODO
 
 pygame.init()
 
@@ -492,7 +492,7 @@ class Car :
 
 # =============================== récupération de l'action =============================================
             
-            epsilon = max(2,100-self.n_games/2)
+            epsilon = max(2,100-self.n_games)
             
             if random.randint(0,100) > epsilon :
                 with torch.inference_mode():
@@ -821,7 +821,7 @@ def cross_over(L):
 def new_population(population):
     new_population = []
     
-    for i in range(len(population)-10):
+    for i in range(len(population)-6):
         new_population.append(mutation(cross_over(random.sample(population[:len(population)//20],2))))
     
     best = Car(voiture = 'f1.png', voiture_taille = 60)
@@ -844,14 +844,14 @@ def new_population(population):
     
     new_population.append(best)
     
-    for i in range(1,10) :
+    for i in range(1, 6) :
         new_population.append(population[i])
     
     return new_population
 
 # création de la première population
 population = []
-for i in range(100):
+for i in range(50):
     population.append(Car())
 
 for i in range(len(population)):
