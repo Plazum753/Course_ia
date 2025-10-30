@@ -8,7 +8,7 @@ def plot(score, score_moy, reward, reward_moy):
     display.display(plt.gcf())
     plt.clf()
     plt.title('Training...')
-    plt.xlabel('Number of games')
+    plt.xlabel('nombre de générations')
     plt.ylabel('Temps')
     plt.plot(score,"g*", label="temps en secondes")    
     plt.plot(score_moy,"g", label="temps moyen en secondes")

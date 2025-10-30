@@ -182,21 +182,6 @@ def load(car, filename="save.pth"):
         car.optimizer1.load_state_dict(sauvegarde["optimizer1"])
         car.optimizer2.load_state_dict(sauvegarde["optimizer2"])
         
-# =============================================================================
-#         car.optimizer1 = optim.Adam(
-#             list(car.model1_features.parameters()) +
-#             list(car.model1_valeur.parameters()) +
-#             list(car.model1_avantages.parameters()),
-#             lr=10**-6
-#             )  
-#         car.optimizer2 = optim.Adam(
-#             list(car.model2_features.parameters()) +
-#             list(car.model2_valeur.parameters()) +
-#             list(car.model2_avantages.parameters()),
-#             lr=10**-6
-#             )  
-# =============================================================================
-        
         car.n_games = sauvegarde["n_game"]
         
         print(f"✅ model chargée depuis {filename}")
@@ -296,7 +281,7 @@ def vecteur_vitesse(vx,vy, angle_voiture):
 # =============================================================================
 
 class Car :
-    def __init__(self,x=837,y=440 ,Q_table = {}, voiture = 'f1.png', voiture_taille = 60):        
+    def __init__(self,x=837,y=440, voiture = 'f1.png', voiture_taille = 60):        
         self.voitureLargeur=1920/voiture_taille #450/16
         self.voitureHauteur=1080/voiture_taille #204/16
         self.img=pygame.image.load(voiture) 
@@ -304,8 +289,6 @@ class Car :
         
         self.x = x
         self.y = y
-        
-        self.Q_table = Q_table.copy()
 
         self.acceleration = 0.1
         self.frein = 0.4/3
@@ -444,13 +427,12 @@ class Car :
         self.Jeux()
     
     def distance(self):
-        global bord
         global np_bord
         global np_bord_ext
         global angles
         
         i_min = max(0, self.distance_parcouru - 10)
-        i_max = min(len(bord), self.distance_parcouru + 10)
+        i_max = min(len(np_bord), self.distance_parcouru + 10)
         
         new_dist = dist(np_bord, np_bord_ext, int(self.distance_parcouru), np.float32(self.position.x), np.float32(self.position.y), int(i_min), int(i_max))
         
