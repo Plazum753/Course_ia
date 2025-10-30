@@ -824,27 +824,12 @@ def new_population(population):
     for i in range(len(population)-6):
         new_population.append(mutation(cross_over(random.sample(population[:len(population)//20],2))))
     
-    best = Car(voiture = 'f1.png', voiture_taille = 60)
-    
-    best.model1_features = population[0].model1_features
-    best.model1_valeur = population[0].model1_valeur
-    best.model1_avantages = population[0].model1_avantages
-    best.model2_features = population[0].model2_features
-    best.model2_valeur = population[0].model2_valeur
-    best.model2_avantages = population[0].model2_avantages
-    
-    best.model1_features.to(best.device)
-    best.model1_valeur.to(best.device)
-    best.model1_avantages.to(best.device)
-    best.model2_features.to(best.device)
-    best.model2_valeur.to(best.device)
-    best.model2_avantages.to(best.device)    
-    
-    best.n_games = population[0].n_games
-    
-    new_population.append(best)
-    
     for i in range(1, 6) :
+        population[i].voitureLargeur=1920/60
+        population[i].voitureHauteur=1080/60
+        population[i].img=pygame.image.load("f1.png") 
+        population[i].img_origine = pygame.transform.scale(population[0].img, (population[0].voitureLargeur, population[0].voitureHauteur))
+
         new_population.append(population[i])
     
     return new_population
