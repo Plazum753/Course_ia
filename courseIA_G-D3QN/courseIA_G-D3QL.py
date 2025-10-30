@@ -931,9 +931,41 @@ def train():
 #     stats = pstats.Stats(profiler).sort_stats('cumtime')
 #     stats.print_stats(16)  # Affiche les 50 fonctions les plus lentes
 # =============================================================================
+
+def test():
+    global affichage
+    ancien_affichage = affichage
+    affichage = True
+    clock = pygame.time.Clock()
+
+    population[0].reset()
+    while not population[0].game_over :
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT :
+                pygame.quit()
+                exit()
+        
+        Zone_jeu.blit(terrain,(0, 0)) 
+        population[0].Jeux()
+        Zone_jeu.blit(population[0].img,population[0].rect.topleft)
+        if population[0].quart_tour<0:
+            affiche("Tour : 0/3",(Largeur-60,25))
+        elif population[0].quart_tour > 11:
+            affiche("Tour : 3/3",(Largeur-60,25))
+        else:
+            affiche("Tour :"+str(population[0].quart_tour//4+1)+"/3",(Largeur-60,25))
+        if population[0].tps_debut == -1 :
+            affiche("Chrono : 0s",(Largeur-75,50))
+        else :
+            affiche("Chrono :"+str(round(population[0].n_frame/100,1))+"s",(Largeur-75,50))
+        pygame.display.update()
+        clock.tick(SPEED)
+    affichage = ancien_affichage
+    
+# test()
     
 while True:
     train()
 
-pygame.quit() #on sort de la boucle donc on quitte
+pygame.quit()
 exit()
