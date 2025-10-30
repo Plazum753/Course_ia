@@ -821,10 +821,10 @@ def cross_over(L):
 def new_population(population):
     new_population = []
     
-    for i in range(len(population)-6):
-        new_population.append(mutation(cross_over(random.sample(population[:len(population)//20],2))))
+    for i in range(len(population)-5):
+        new_population.append(mutation(cross_over(random.sample(population[:6],2))))
     
-    for i in range(1, 6) :
+    for i in range(5) :
         population[i].voitureLargeur=1920/60
         population[i].voitureHauteur=1080/60
         population[i].img=pygame.image.load("f1.png") 
@@ -836,7 +836,7 @@ def new_population(population):
 
 # création de la première population
 population = []
-for i in range(50):
+for i in range(20):
     population.append(Car())
 
 for i in range(len(population)):
@@ -862,6 +862,7 @@ def train():
     #clock = pygame.time.Clock()
     
     for i in range(20):
+        print("Game n°"+str(population[0].n_games)) # TODO à enlever quand ça fonctionnera
         for i in range(len(population)):
             population[i].reset()
     
