@@ -7,7 +7,8 @@ Machine Learning sur un jeu de course.
 * courseIA_AG : Algorithme génétique
 * courseIA_QL : Double Q-Learning (ne fonctionne pas)
 * courseIA_DQL : Deep-Q-learning
-* courseIA_DDDQL : Dueling Double Deep-Q-learning
+* courseIA_D3QL : Dueling Double Deep-Q-learning
+* courseIA_G-D3QL : Genetic Dueling Double Deep-Q-learning
 
 ## Prerequis
 
