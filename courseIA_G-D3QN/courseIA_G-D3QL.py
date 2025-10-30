@@ -821,10 +821,10 @@ def cross_over(L):
 def new_population(population):
     new_population = []
     
-    for i in range(len(population)-5):
+    for i in range(len(population)-3):
         new_population.append(mutation(cross_over(random.sample(population[:6],2))))
     
-    for i in range(5) :
+    for i in range(3) :
         population[i].voitureLargeur=1920/60
         population[i].voitureHauteur=1080/60
         population[i].img=pygame.image.load("f1.png") 
