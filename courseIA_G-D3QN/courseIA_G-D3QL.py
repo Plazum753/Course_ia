@@ -860,18 +860,15 @@ def train():
     global affichage
     global population
         
-    print("Generation n°"+str(population[0].n_games//20))
+    print("Generation n°"+str(population[0].n_games//10))
     #clock = pygame.time.Clock()
     
-    for i in range(20):
+    for i in range(10):
         print("Game n°"+str(population[0].n_games))
 
         for i in range(len(population)):
             population[i].reset()
-    
-        if population[0].n_games%20==0:
-            save(population[0], filename="save.pth")
-            
+                
 # =============================================================================
 #         profiler = cProfile.Profile()
 #         profiler.enable()
@@ -890,7 +887,7 @@ def train():
             if affichage == True :
                 Zone_jeu.blit(terrain,(0, 0)) 
             for i in range(len(population)):
-                if not population[i].game_over:
+                if not population[i].game_over :
                     population[i].Jeux()
                     if affichage == True :
                         Zone_jeu.blit(population[i].img,population[i].rect.topleft) #on superpose la voiture dans la zone de jeu
@@ -926,22 +923,26 @@ def train():
         population.sort(key=lambda v: v.reward_tot,reverse=True)
         
         if population[0].n_frame/100 < record and population[0].n_mort == 0:
-            record = population[0].n_frame/100
+            record = population[0].n_frame/100    
+    
+        scores_plot.append(round(population[0].n_frame/100,2))
+        reward_moy = round(sum([population[i].n_mort for i in range(len(population))])/len(population),2) #car.reward_tot
+        reward_plot.append(population[0].n_mort)
+        score_moy = round(sum([population[i].n_frame/100 for i in range(len(population))])/len(population),2)
+    
+        scores_moy_plot.append(score_moy)
+        reward_moy_plot.append(reward_moy)
         
+        plot(scores_plot,scores_moy_plot,reward_plot, reward_moy_plot)
+    
+
     print("temps : "+str(round(population[0].n_frame/100,2)))
     print("record : "+str(round(record,2))+"s")
     print()
-    scores_plot.append(round(population[0].n_frame/100,2))
-    reward_moy.append(round(sum([population[i].n_mort for i in range(len(population))])/len(population),2)) #car.reward_tot
-    reward_plot.append(population[0].n_mort)
-    score_moy.append(round(sum([population[i].n_frame/100 for i in range(len(population))])/len(population),2))
+    save(population[0], filename="save.pth")
 
-    scores_moy_plot.append(score_moy)
-    reward_moy_plot.append(reward_moy)
-    
-    plot(scores_plot,scores_moy_plot,reward_plot, reward_moy_plot)
-    
     population = new_population(population)
+
     
 # =============================================================================
 #     profiler.disable()
