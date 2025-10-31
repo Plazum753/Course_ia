@@ -593,7 +593,7 @@ class Car :
             self.buffer_index = (self.buffer_index + 1) % self.buffer_max
             self.buffer_size = min(self.buffer_size+1,self.buffer_max)
             
-            if self.n_frame % 128 == 0 and self.buffer_size > self.batch_size : #TODO essayer de repasser à 16
+            if self.n_frame % 16 == 0 and self.buffer_size > self.batch_size :
                 indices = np.random.randint(0, self.buffer_size, size=self.batch_size)
             
                 states = torch.as_tensor(self.buffer_state[indices], dtype=torch.float32, device=self.device)
@@ -873,9 +873,10 @@ def train():
 #         profiler = cProfile.Profile()
 #         profiler.enable()
 # =============================================================================
-        
         fini = 0
         while fini < len(population) :
+            fini = 0
+            
             for event in pygame.event.get():
                 if event.type == pygame.QUIT : # lorsqu'on clique sur la croix rouge
                     pygame.quit()
