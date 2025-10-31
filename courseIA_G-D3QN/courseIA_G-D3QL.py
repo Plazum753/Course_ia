@@ -19,7 +19,6 @@ import numpy as np
 # profiler.enable()
 # =============================================================================
 
-affichage = True #TODO
 
 pygame.init()
 
@@ -594,7 +593,7 @@ class Car :
             self.buffer_index = (self.buffer_index + 1) % self.buffer_max
             self.buffer_size = min(self.buffer_size+1,self.buffer_max)
             
-            if self.n_frame % 16 == 0 and self.buffer_size > self.batch_size :
+            if self.n_frame % 128 == 0 and self.buffer_size > self.batch_size : #TODO essayer de repasser à 16
                 indices = np.random.randint(0, self.buffer_size, size=self.batch_size)
             
                 states = torch.as_tensor(self.buffer_state[indices], dtype=torch.float32, device=self.device)
@@ -729,6 +728,7 @@ def crea_model():
             nn.ReLU(),
             nn.Linear(in_features=256, out_features=6)
             )
+        
         model = [
             model1_features,
             model1_valeur,
@@ -759,6 +759,7 @@ def mutation(A):
             list(A.model2_avantages.parameters()),
             lr=A.learning_rate
             )  
+    
     return A
                 
 def cross_over(L):
@@ -821,9 +822,6 @@ def cross_over(L):
 def new_population(population):
     new_population = []
     
-    for i in range(len(population)-3):
-        new_population.append(mutation(cross_over(random.sample(population[:6],2))))
-    
     for i in range(3) :
         population[i].voitureLargeur=1920/60
         population[i].voitureHauteur=1080/60
@@ -831,6 +829,11 @@ def new_population(population):
         population[i].img_origine = pygame.transform.scale(population[0].img, (population[0].voitureLargeur, population[0].voitureHauteur))
 
         new_population.append(population[i])
+        
+    while len(new_population) != len(population) :
+        new_population.append(mutation(cross_over(random.sample(population[:6],2))))
+    
+
     
     return new_population
 
@@ -842,6 +845,7 @@ for i in range(20):
 for i in range(len(population)):
     load(population[i])
 
+affichage = False
 
 scores_moy_plot = []
 reward_plot = []
@@ -855,20 +859,23 @@ def train():
     global record
     global affichage
     global population
-    
-    ancien_affichage = affichage
-    
+        
     print("Generation n°"+str(population[0].n_games//20))
     #clock = pygame.time.Clock()
     
     for i in range(20):
-        print("Game n°"+str(population[0].n_games)) # TODO à enlever quand ça fonctionnera
+        print("Game n°"+str(population[0].n_games))
+
         for i in range(len(population)):
             population[i].reset()
     
         if population[0].n_games%20==0:
-            affichage = True
             save(population[0], filename="save.pth")
+            
+# =============================================================================
+#         profiler = cProfile.Profile()
+#         profiler.enable()
+# =============================================================================
         
         fini = 0
         while fini < len(population) :
@@ -876,6 +883,9 @@ def train():
                 if event.type == pygame.QUIT : # lorsqu'on clique sur la croix rouge
                     pygame.quit()
                     exit()
+            
+            if population[-1].n_frame%100 == 0:
+                affichage = True
                         
             if affichage == True :
                 Zone_jeu.blit(terrain,(0, 0)) 
@@ -890,22 +900,28 @@ def train():
             if affichage == True :
                     
                 Zone_jeu.blit(population[0].img,population[0].rect.topleft) #on place la meilleur voiture au dessus des autres
-                # if car.quart_tour<0:
-                #     affiche("Tour : 0/3",(Largeur-60,25))
-                # elif car.quart_tour > 11:
-                #     affiche("Tour : 3/3",(Largeur-60,25))
-                # else:
-                #     affiche("Tour :"+str(car.quart_tour//4+1)+"/3",(Largeur-60,25))
-                # if car.tps_debut == -1 :
-                #     affiche("Chrono : 0s",(Largeur-75,50))
-                # else :
-                #     affiche("Chrono :"+str(round(car.n_frame/100,1))+"s",(Largeur-75,50))
+                if population[0].quart_tour<0:
+                    affiche("Tour : 0/3",(Largeur-60,25))
+                elif population[0].quart_tour > 11:
+                    affiche("Tour : 3/3",(Largeur-60,25))
+                else:
+                    affiche("Tour :"+str(population[0].quart_tour//4+1)+"/3",(Largeur-60,25))
+                if population[0].tps_debut == -1 :
+                    affiche("Chrono : 0s",(Largeur-75,50))
+                else :
+                    affiche("Chrono :"+str(round(population[0].n_frame/100,1))+"s",(Largeur-75,50))
                 
                 pygame.display.update() #on rafraichit l'écran.
                 #clock.tick(0)
-
-        if ancien_affichage != affichage:
-            affichage = ancien_affichage
+                
+# =============================================================================
+#             if population[0].n_frame%1000==0:
+#                 profiler.disable()
+#                 stats = pstats.Stats(profiler).sort_stats('cumtime')
+#                 stats.print_stats(50)  # Affiche les 50 fonctions les plus lentes
+# =============================================================================
+                
+            affichage = False
             
         population.sort(key=lambda v: v.reward_tot,reverse=True)
         
@@ -935,7 +951,6 @@ def train():
 
 def test():
     global affichage
-    ancien_affichage = affichage
     affichage = True
     clock = pygame.time.Clock()
 
@@ -961,7 +976,7 @@ def test():
             affiche("Chrono :"+str(round(population[0].n_frame/100,1))+"s",(Largeur-75,50))
         pygame.display.update()
         clock.tick(SPEED)
-    affichage = ancien_affichage
+    affichage = False
     
 # test()
     
